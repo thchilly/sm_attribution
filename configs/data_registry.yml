@@ -1,0 +1,100 @@
+# configs/data_registry.yml
+
+paths:
+  root: "/Users/thchilly/Documents/sm_attribution/data"
+  raw_models: "/Users/thchilly/Documents/sm_attribution/data/models"
+  raw_obs: "/Users/thchilly/Documents/sm_attribution/data/observed"
+  metadata: "/Users/thchilly/Documents/sm_attribution/data/metadata"
+  processed_models_1m: "/Users/thchilly/Documents/sm_attribution/data/models_1m"
+
+naming_notes:
+  obsclim: "observational (factual) climate"
+  counterclim: "counterfactual climate"
+  soc: "socioeconomic forcing; histsoc for all models except for web-dhm-sg 2015soc"
+
+models:
+  classic:
+    obsclim_histsoc:        "/Users/thchilly/Documents/sm_attribution/data/models/classic_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
+    counterclim_histsoc:    "/Users/thchilly/Documents/sm_attribution/data/models/classic_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
+
+  cwatm:
+    obsclim_histsoc:        "/Users/thchilly/Documents/sm_attribution/data/models/cwatm_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
+    counterclim_histsoc:    "/Users/thchilly/Documents/sm_attribution/data/models/cwatm_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
+    ancillary:
+      folder:            "/Users/thchilly/Documents/sm_attribution/data/models/CWATfiles"
+      cell_storage_depth1: "/Users/thchilly/Documents/sm_attribution/data/models/CWATfiles/storageDepth1.nc"
+      cell_storage_depth2: "/Users/thchilly/Documents/sm_attribution/data/models/CWATfiles/storageDepth2.nc"
+      landcover_fraction:  "/Users/thchilly/Documents/sm_attribution/data/models/CWATfiles/fractionLandcover_1850_2018.nc"
+      max_root_depth_forest: "/Users/thchilly/Documents/sm_attribution/data/models/CWATfiles/maxRootDepth_forest.nc"
+      max_root_depth_grass:  "/Users/thchilly/Documents/sm_attribution/data/models/CWATfiles/maxRootDepth_grass.nc"
+      max_root_depth_irr_paddy:    "/Users/thchilly/Documents/sm_attribution/data/models/CWATfiles/maxRootDepth_irrPaddy.nc"
+      max_root_depth_irr_nonpaddy: "/Users/thchilly/Documents/sm_attribution/data/models/CWATfiles/maxRootDepth_irrNonPaddy.nc"
+      notes: "CWATM often requires static layers to interpret soil layers/depths correctly."
+
+  h08:
+    obsclim_histsoc:        "/Users/thchilly/Documents/sm_attribution/data/models/h08_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
+    counterclim_histsoc:    "/Users/thchilly/Documents/sm_attribution/data/models/h08_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
+
+  hydropy:
+    # Note 'rootmoist' in filename — variable handled in code.
+    obsclim_histsoc:        "/Users/thchilly/Documents/sm_attribution/data/models/hydropy_gswp3-w5e5_obsclim_histsoc_default_rootmoist_global_monthly_1901_2019.nc"
+    counterclim_histsoc:    "/Users/thchilly/Documents/sm_attribution/data/models/hydropy_gswp3-w5e5_counterclim_histsoc_default_rootmoist_global_monthly_1901_2019.nc"
+
+  jules-w2:
+    obsclim_histsoc:        "/Users/thchilly/Documents/sm_attribution/data/models/jules-w2_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
+    counterclim_histsoc:    "/Users/thchilly/Documents/sm_attribution/data/models/jules-w2_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
+
+  miroc-integ-land:
+    obsclim_histsoc:        "/Users/thchilly/Documents/sm_attribution/data/models/miroc-integ-land_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
+    counterclim_histsoc:    "/Users/thchilly/Documents/sm_attribution/data/models/miroc-integ-land_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
+
+  ssib4-triffid-fire:
+    obsclim_histsoc:        "/Users/thchilly/Documents/sm_attribution/data/models/ssib4-triffid-fire_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
+    counterclim_histsoc:    "/Users/thchilly/Documents/sm_attribution/data/models/ssib4-triffid-fire_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
+
+  watergap2-2e:
+    obsclim_histsoc:        "/Users/thchilly/Documents/sm_attribution/data/models/watergap2-2e_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
+    counterclim_histsoc:    "/Users/thchilly/Documents/sm_attribution/data/models/watergap2-2e_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
+
+  web-dhm-sg:
+    # 2015soc for this model
+    obsclim_2015soc:        "/Users/thchilly/Documents/sm_attribution/data/models/web-dhm-sg_gswp3-w5e5_obsclim_2015soc_default_soilmoist_global_monthly_1901_2019.nc"
+    counterclim_2015soc:    "/Users/thchilly/Documents/sm_attribution/data/models/web-dhm-sg_gswp3-w5e5_counterclim_2015soc_default_soilmoist_global_monthly_1901_2019.nc"
+
+observations:
+  era5land: "/Users/thchilly/Documents/sm_attribution/data/observed/ERA5-Land/soil_moisture/monthly/*.nc"
+  gleam:    "/Users/thchilly/Documents/sm_attribution/data/observed/GLEAM/soil_moisture/monthly/*.nc"
+  gldas:    "/Users/thchilly/Documents/sm_attribution/data/observed/GLDAS/soil_moisture/monthly/*.nc"
+  #grace:    "/Users/thchilly/Documents/sm_attribution/data/observed/GRACE/.../*.nc"
+
+processed:
+  # 0–1 m homogenized outputs 
+  # Mirrored flat naming; append `_1m` before `.nc` for clarity.
+  models_1m:
+    classic:
+      obsclim_histsoc:        "/Users/thchilly/Documents/sm_attribution/data/models_1m/classic_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      counterclim_histsoc:    "/Users/thchilly/Documents/sm_attribution/data/models_1m/classic_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+    cwatm:
+      obsclim_histsoc:        "/Users/thchilly/Documents/sm_attribution/data/models_1m/cwatm_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      counterclim_histsoc:    "/Users/thchilly/Documents/sm_attribution/data/models_1m/cwatm_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+    h08:
+      obsclim_histsoc:        "/Users/thchilly/Documents/sm_attribution/data/models_1m/h08_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      counterclim_histsoc:    "/Users/thchilly/Documents/sm_attribution/data/models_1m/h08_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+    hydropy:
+      obsclim_histsoc:        "/Users/thchilly/Documents/sm_attribution/data/models_1m/hydropy_gswp3-w5e5_obsclim_histsoc_default_rootmoist_global_monthly_1901_2019_1m.nc"
+      counterclim_histsoc:    "/Users/thchilly/Documents/sm_attribution/data/models_1m/hydropy_gswp3-w5e5_counterclim_histsoc_default_rootmoist_global_monthly_1901_2019_1m.nc"
+    jules-w2:
+      obsclim_histsoc:        "/Users/thchilly/Documents/sm_attribution/data/models_1m/jules-w2_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      counterclim_histsoc:    "/Users/thchilly/Documents/sm_attribution/data/models_1m/jules-w2_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+    miroc-integ-land:
+      obsclim_histsoc:        "/Users/thchilly/Documents/sm_attribution/data/models_1m/miroc-integ-land_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      counterclim_histsoc:    "/Users/thchilly/Documents/sm_attribution/data/models_1m/miroc-integ-land_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+    ssib4-triffid-fire:
+      obsclim_histsoc:        "/Users/thchilly/Documents/sm_attribution/data/models_1m/ssib4-triffid-fire_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      counterclim_histsoc:    "/Users/thchilly/Documents/sm_attribution/data/models_1m/ssib4-triffid-fire_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+    watergap2-2e:
+      obsclim_histsoc:        "/Users/thchilly/Documents/sm_attribution/data/models_1m/watergap2-2e_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      counterclim_histsoc:    "/Users/thchilly/Documents/sm_attribution/data/models_1m/watergap2-2e_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+    web-dhm-sg:
+      obsclim_2015soc:        "/Users/thchilly/Documents/sm_attribution/data/models_1m/web-dhm-sg_gswp3-w5e5_obsclim_2015soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      counterclim_2015soc:    "/Users/thchilly/Documents/sm_attribution/data/models_1m/web-dhm-sg_gswp3-w5e5_counterclim_2015soc_default_soilmoist_global_monthly_1901_2019_1m.nc"

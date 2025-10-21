@@ -1,0 +1,36 @@
+data/
+documentation/
+
+# OS/editor cruft
+.DS_Store
+Thumbs.db
+*.code-workspace
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.venv/
+.env
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Large science files (common)
+*.nc
+*.nc4
+*.grb
+*.grib
+*.zarr
+*.parquet
+*.tif
+*.tiff
+
+# Outputs
+figures/*.png
+figures/*.pdf
+figures/*.svg
+*.log
+*.tmp
