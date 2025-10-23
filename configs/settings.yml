@@ -1,4 +1,8 @@
 depth_target_m: 1.0
 time_resolution: monthly
-grid: "common_grid"   # define in data_registry / regridding step
-ssi_threshold_fixed: -1.5
+target_calendar: proleptic_gregorian
+ssi:
+  scale_months: 3
+  threshold_fixed: -1.5
+  anchor: counterclim
+grid: "common_grid"

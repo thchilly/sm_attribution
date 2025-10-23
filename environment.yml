@@ -1,0 +1,19 @@
+name: sm-attr
+channels: [conda-forge]
+dependencies:
+  - python>=3.10
+  - xarray
+  - netcdf4
+  - cftime
+  - numpy
+  - pandas
+  - pyyaml
+  - bottleneck
+  - pytest
+  - dask
+  - tqdm
+  # viz
+  - matplotlib
+  - seaborn
+  - cartopy
+  - regionmask

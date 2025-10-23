@@ -1,0 +1,15 @@
+xarray
+netCDF4
+cftime
+numpy
+pandas
+PyYAML
+bottleneck
+pytest
+# optional
+dask[complete]
+tqdm
+matplotlib
+seaborn
+cartopy
+regionmask
