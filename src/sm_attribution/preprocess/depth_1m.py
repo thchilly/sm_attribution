@@ -63,6 +63,35 @@ def web_dhm_sg_to_1m(ds: xr.Dataset, scenario: str) -> xr.DataArray:
     da = ds["soilmoist"]
     return _add_common_attrs(da, "web-dhm-sg", scenario, "single-layer total treated as 0–1 m (v0)")
 
+def lpjml5_7_10_fire_to_1m(ds: xr.Dataset, scenario: str) -> xr.DataArray:
+    """
+    Integrate LPJmL5-7-10-fire layered soil moisture to 0–1 m using depth bounds.
+    Expects variables:
+      - soilmoist(time, depth, lat, lon) [kg m-2 per layer]
+      - depth_bnds(depth, bnds) [m], with bnds=(top, bottom)
+    """
+    sm = ds["soilmoist"]
+    if "depth_bnds" not in ds:
+        raise KeyError("LPJmL5-7-10-fire: missing 'depth_bnds' for vertical integration")
+    bnds = ds["depth_bnds"]  # (depth, bnds)
+    top = bnds.isel(bnds=0)   # (depth)
+    bot = bnds.isel(bnds=1)   # (depth)
+
+    # Intersection length of each layer with [0, 1.0] meters
+    top_clip = top.clip(min=0.0, max=TARGET_DEPTH_M)
+    bot_clip = bot.clip(min=0.0, max=TARGET_DEPTH_M)
+    overlap = (bot_clip - top_clip).clip(min=0.0)  # (depth)
+
+    # Fraction of each layer included in 0–1 m
+    thickness = (bot - top)
+    frac = (overlap / thickness).fillna(0.0)
+
+    # Broadcast frac over (time, lat, lon) and sum over depth
+    da = (sm * frac).sum("depth", skipna=True)
+    note = "depth-weighted integration 0–1 m using depth_bnds (v0 exact)"
+    return _add_common_attrs(da, "lpjml5-7-10-fire", scenario, note)
+
+
 # Dispatcher
 MODEL_TO_FUNC = {
     "h08": h08_to_1m,
@@ -71,4 +100,5 @@ MODEL_TO_FUNC = {
     "miroc-integ-land": miroc_integ_land_to_1m,
     "watergap2-2e": watergap22e_to_1m,
     "web-dhm-sg": web_dhm_sg_to_1m,
+    "lpjml5-7-10-fire": lpjml5_7_10_fire_to_1m,
 }

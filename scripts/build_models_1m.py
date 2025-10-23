@@ -4,7 +4,15 @@ import argparse
 from sm_attribution.io.registry import Registry
 from sm_attribution.preprocess.harmonize_models import harmonize_all
 
-DEFAULT_MODELS = ["h08", "hydropy", "jules-w2", "miroc-integ-land", "watergap2-2e", "web-dhm-sg"]
+DEFAULT_MODELS = [
+    "h08",
+    "hydropy",
+    "jules-w2",
+    "miroc-integ-land",
+    "watergap2-2e",
+    "web-dhm-sg",
+    "lpjml5-7-10-fire",
+]
 
 def main():
     ap = argparse.ArgumentParser(description="Build 0–1 m homogenized NetCDFs for selected models.")
