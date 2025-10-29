@@ -49,3 +49,25 @@ class Registry:
             "obsclim_1901soc",
             "counterclim_1901soc",
         )
+    
+
+        # ------------------------------------------------------------------
+    # OBSERVATIONS
+    # ------------------------------------------------------------------
+    def get_obs_raw(self, dataset: str) -> str:
+        """Return path pattern for raw observation dataset (from observations section)."""
+        try:
+            path = self.cfg["observations"][dataset]["path"]
+        except KeyError as e:
+            raise KeyError(f"Missing raw observation key in registry for dataset={dataset}") from e
+        return path
+
+    def get_obs_processed(self, dataset: str) -> str:
+        """Return path for processed observation dataset (from processed.observed_1m section)."""
+        try:
+            path = self.cfg["processed"]["observed_1m"][dataset]
+        except KeyError as e:
+            raise KeyError(f"Missing processed observation key in registry for dataset={dataset}") from e
+        # ensure parent directory exists
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        return path

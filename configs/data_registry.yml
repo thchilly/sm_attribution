@@ -68,16 +68,17 @@ models:
 # --------------------------------------------------------------------
 # RAW OBSERVATIONS (use only NetCDF/NC4; ignore .mat/.m files)
 observations:
-  era5:
+  era5land:
     path: "/Users/thchilly/projects/sm_attribution/data/observed/ERA5/*.nc"
-    notes: "Monthly files like sm1980.nc … sm2010.nc; ignore .mat/.m"
+    notes: "ERA5-Land monthly files (1980–2010). Variables: swvl1..swvl4 volumetric m³/m³. Use first three layers for 0–1 m integration."
   gleam:
     path: "/Users/thchilly/projects/sm_attribution/data/observed/GLEAM/SMroot_*_GLEAM_v*.nc"
     notes: "Root-zone monthly; check depth assumptions when harmonizing to 0–1 m"
   gldas:
     path: "/Users/thchilly/projects/sm_attribution/data/observed/GLDASv2/*.nc4"
     notes: "NOAH 0.25°; pick correct variable and layers for 0–1 m integration"
-  # grace: add if needed, for TWSA checks
+  # grace-da-dm: add later
+  # somo.ml: add later
 
 # --------------------------------------------------------------------
 # PROCESSED OUTPUTS — after homogenization to 0–1 m (models + observations)
@@ -120,6 +121,6 @@ processed:
       counterclim_1901soc:    "/Users/thchilly/projects/sm_attribution/data/models_1m/lpjml5-7-10-fire_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
 
   observed_1m:
-    era5:   "/Users/thchilly/projects/sm_attribution/data/observed_1m/ERA5/*.nc"
+    era5land: "/Users/thchilly/projects/sm_attribution/data/observed_1m/ERA5/ERA5L_soilmoist_1m_monthly_0p5deg_1980_2010.nc"
     gleam:  "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLEAM/*.nc"
     gldas:  "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLDASv2/*.nc"
