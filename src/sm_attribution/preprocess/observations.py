@@ -143,3 +143,80 @@ def era5land_to_1m_monthly_halfdeg_v1(registry) -> xr.DataArray:
         "source_files": path_glob,
     })
     return sm
+
+# -----------------------------------------------------------------------------
+# GLEAM v4.2 (SMrz) — v0 processing (keep volumetric root-zone moisture)
+# Outputs:
+#  - v4.2a 1980–2020
+#  - v4.2a 2003–2020 (aligned with v4.2b period)
+#  - v4.2b 2003–2020
+# -----------------------------------------------------------------------------
+
+def _to_month_start(ds: xr.Dataset) -> xr.Dataset:
+    """Ensure monthly timestamps are at month start (00:00 on first day)."""
+    if "time" not in ds.coords:
+        return ds
+    t = xr.cftime_range(start=str(ds.time.dt.year.min().item()) + "-01-01",
+                        end=str(ds.time.dt.year.max().item()) + "-12-01",
+                        freq="MS",
+                        calendar="proleptic_gregorian")
+    # Only re-stamp if monthly and lengths match
+    if ds.sizes.get("time", -1) == t.size:
+        ds = ds.assign_coords(time=t)
+    return ds
+
+def _open_gleam_stack(path_glob: str) -> xr.Dataset:
+    files = sorted(glob.glob(path_glob))
+    if not files:
+        raise FileNotFoundError(f"No GLEAM files matched: {path_glob}")
+    ds = xr.open_mfdataset(files, combine="by_coords", parallel=False)
+    # Normalize coords
+    if "longitude" in ds.coords:
+        ds = ds.rename({"longitude": "lon"})
+    if "latitude" in ds.coords:
+        ds = ds.rename({"latitude": "lat"})
+    ds = _to_lon_m180_180(ds)
+    # Time handling: already proleptic_gregorian monthly with end-of-month stamps → shift to month-start
+    ds = _to_month_start(ds)
+    return ds
+
+def _gleam_smrz_to_halfdeg_v0(ds: xr.Dataset) -> xr.DataArray:
+    """Block-average SMrz from 0.1° to 0.5°. Keep volumetric units (m3 m-3)."""
+    if "SMrz" not in ds.data_vars:
+        raise KeyError("Expected variable 'SMrz' in GLEAM dataset.")
+    da = ds["SMrz"]
+    da = _maybe_block_coarsen_to_half_degree(da)
+    da.name = "soilmoist_1m"
+    da.attrs.update({
+        "units": "m3 m-3",
+        "long_name": "GLEAM root-zone soil moisture (v0, volumetric)",
+        "method": "block-mean 0.1°→0.5°; timestamps set to month-start",
+        "note": "v0 retains root-zone volumetric moisture without depth remapping to 0–1 m.",
+        "calendar": "proleptic_gregorian",
+    })
+    return da
+
+def gleam42a_1980_2020_v0(registry) -> xr.DataArray:
+    """GLEAM v4.2a SMrz, 1980–2020, monthly 0.5°, volumetric (v0)."""
+    path_glob = registry.get_obs_raw("gleam42a")
+    ds = _open_gleam_stack(path_glob)
+    da = _gleam_smrz_to_halfdeg_v0(ds.sel(time=slice("1980-01-01", "2020-12-01")))
+    return da
+
+def gleam42a_2003_2020_v0(registry) -> xr.DataArray:
+    """GLEAM v4.2a SMrz subset 2003–2020, to compare with v4.2b."""
+    path_glob = registry.get_obs_raw("gleam42a")
+    ds = _open_gleam_stack(path_glob)
+    da = _gleam_smrz_to_halfdeg_v0(ds.sel(time=slice("2003-01-01", "2020-12-01")))
+    return da
+
+def gleam42b_2003_2020_v0(registry) -> xr.DataArray:
+    """GLEAM v4.2b SMrz, 2003–2020, monthly 0.5°, volumetric (v0)."""
+    path_glob = registry.get_obs_raw("gleam42b")
+    ds = _open_gleam_stack(path_glob)
+    da = _gleam_smrz_to_halfdeg_v0(ds.sel(time=slice("2003-01-01", "2020-12-01")))
+    return da
+
+# Backward-compatible aliases (old naming)
+gleam42a_full_v0 = gleam42a_1980_2020_v0
+gleam42b_full_v0 = gleam42b_2003_2020_v0
