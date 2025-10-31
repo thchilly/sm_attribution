@@ -7,12 +7,24 @@ from sm_attribution.preprocess.observations import (
     gleam42a_1980_2020_v0,
     gleam42a_2003_2020_v0,
     gleam42b_2003_2020_v0,
+    gldas_v20_to_1m_monthly_halfdeg_v0,
+    gldas_v21_to_1m_monthly_halfdeg_v0,
 )
 
 def main():
     ap = argparse.ArgumentParser(description="Build observed datasets (monthly 0.5°)")
-    ap.add_argument("--dataset", required=True,
-                    choices=["era5land", "gleam42a_1980_2020", "gleam42a_2003_2020", "gleam42b_2003_2020"])
+    ap.add_argument(
+        "--dataset",
+        required=True,
+        choices=[
+            "era5land",
+            "gleam42a_1980_2020",
+            "gleam42a_2003_2020",
+            "gleam42b_2003_2020",
+            "gldas_v20_1948_2014",
+            "gldas_v21_2000_2020",
+        ],
+    )
     ap.add_argument("--registry", default="configs/data_registry.yml")
     args = ap.parse_args()
 
@@ -30,6 +42,12 @@ def main():
     elif args.dataset == "gleam42b_2003_2020":
         da = gleam42b_2003_2020_v0(reg)
         out_path = reg.get_obs_processed("gleam42b_2003_2020")
+    elif args.dataset == "gldas_v20_1948_2014":
+        da = gldas_v20_to_1m_monthly_halfdeg_v0(reg)
+        out_path = reg.get_obs_processed("gldas_v20_1948_2014")
+    elif args.dataset == "gldas_v21_2000_2020":
+        da = gldas_v21_to_1m_monthly_halfdeg_v0(reg)
+        out_path = reg.get_obs_processed("gldas_v21_2000_2020")
     else:
         raise NotImplementedError(args.dataset)
 

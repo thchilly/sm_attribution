@@ -37,81 +37,95 @@ def _to_lon_m180_180(ds: xr.Dataset) -> xr.Dataset:
     if "lat" not in ds.coords and "latitude" in ds.coords:
         ds = ds.rename({"latitude": "lat"})
     lon = ds["lon"]
-    if lon.max() > 180.0 + 1e-6:  # likely 0..360
+    if float(lon.max().item()) > 180.0 + 1e-6:  # likely 0..360
         lon_new = (((lon + 180.0) % 360.0) - 180.0)
         ds = ds.assign_coords(lon=lon_new).sortby("lon")
     return ds
 
-def _maybe_block_coarsen_to_half_degree(da: xr.DataArray) -> xr.DataArray:
+def _maybe_block_coarsen_to_half_degree(
+    da: xr.DataArray,
+    *,
+    allow_xesmf: bool = False,
+    atol_deg: float = 5e-3
+) -> xr.DataArray:
     """
-    If grid is ~0.1° with constant spacing, block-mean to 0.5° (factor 5).
-    Otherwise, try xESMF if available; else raise with instructions.
+    Coarsen a regular lat/lon grid to 0.5° by exact block means when possible.
+    - 0.1° → factor 5  (backwards compatible path)
+    - 0.25° → factor 2 (GLDAS)
+    For any other spacing, raise with a helpful message unless allow_xesmf=True.
+
+    Assumes the variable is *intensive* (kg m-2, m3 m-3), so block *mean* is correct.
     """
     if ("lat" not in da.coords) or ("lon" not in da.coords):
-        raise ValueError("DataArray must have lat/lon coordinates.")
+        raise ValueError("DataArray must have 'lat' and 'lon' coordinates.")
 
-    def _step(arr):
-        vals = np.diff(arr.values)
+    # Ensure ascending latitude for coarsen
+    if da["lat"].size > 1 and da["lat"][1] < da["lat"][0]:
+        da = da.sortby("lat")
+
+    # Detect nominal spacing
+    def _step(coord):
+        vals = np.diff(coord.values)
         return float(np.round(np.median(vals), 6))
 
-    dlat = _step(da["lat"])
-    dlon = _step(da["lon"])
-    # Accept a narrow tolerance around 0.1°
-    if np.isclose(abs(dlat), 0.1, atol=5e-3) and np.isclose(abs(dlon), 0.1, atol=5e-3):
-        # Make sizes divisible by 5 by trimming edges if needed
-        def _trim_to_multiple(coord, factor=5):
-            n = coord.size
-            r = n % factor
-            if r == 0:
-                return slice(None)
-            # Trim equally from both ends if possible; else from end.
-            trim = r
-            return slice(None, n - trim)
+    dlat = abs(_step(da["lat"]))
+    dlon = abs(_step(da["lon"]))
 
-        slat = _trim_to_multiple(da["lat"])
-        slon = _trim_to_multiple(da["lon"])
-        da_t = da.isel(lat=slat, lon=slon)
+    # Map spacing to coarsen factors
+    def _detect_factor(step):
+        if np.isclose(step, 0.1, atol=atol_deg):   # ERA5/GLEAM legacy
+            return 5
+        if np.isclose(step, 0.25, atol=atol_deg):  # GLDAS
+            return 2
+        return None
 
-        # Ensure ascending lat for coarsen with boundary="trim"
-        if da_t["lat"][1] < da_t["lat"][0]:
-            da_t = da_t.sortby("lat")
+    f_lat = _detect_factor(dlat)
+    f_lon = _detect_factor(dlon)
 
-        coarsened = da_t.coarsen(lat=5, lon=5, boundary="trim").mean()
-        # Rebuild regular 0.5° coords approximately
-        new_dlat = abs(float(np.round(5 * dlat, 6)))
-        new_dlon = abs(float(np.round(5 * dlon, 6)))
-        # Keep existing coords from coarsen (they're midpoints), that’s fine.
-        return coarsened
-    else:
-        # Try xESMF if installed
-        try:
-            import xesmf as xe  # type: ignore
-        except Exception as exc:
-            raise RuntimeError(
-                f"Grid spacing is not ~0.1°. Install xESMF to regrid to 0.5° (pip install xesmf). "
-                f"Detected dlat={dlat}, dlon={dlon}."
-            ) from exc
+    if f_lat is not None and f_lon is not None:
+        # Trim edges so dimension is divisible by factor (same behavior as before)
+        def _trim_slice(n, f):
+            r = n % f
+            return slice(None) if r == 0 else slice(None, n - r)
 
-        # Build a 0.5° target grid covering same extent
-        lat = da["lat"].values
-        lon = da["lon"].values
-        lat_min, lat_max = float(lat.min()), float(lat.max())
-        lon_min, lon_max = float(lon.min()), float(lon.max())
-        lat_out = np.arange(np.ceil(lat_min*2)/2, np.floor(lat_max*2)/2 + 0.5, 0.5)
-        lon_out = np.arange(np.ceil(lon_min*2)/2, np.floor(lon_max*2)/2 + 0.5, 0.5)
-        tgt = xr.Dataset(coords={"lat": lat_out, "lon": lon_out})
+        da_t = da.isel(lat=_trim_slice(da.sizes["lat"], f_lat),
+                       lon=_trim_slice(da.sizes["lon"], f_lon))
 
-        regridder = xe.Regridder(da.to_dataset(name="var"), tgt, "bilinear", periodic=False, reuse_weights=False)
-        out = regridder(da)
-        regridder.clean_weight_file()
+        # Coarsen by exact block means (no interpolation)
+        out = da_t.coarsen(lat=f_lat, lon=f_lon, boundary="trim").mean()
+        out.attrs.update(da.attrs)
+        out.attrs["regrid_note"] = f"block-mean from ~{dlat:.3f}°×{dlon:.3f}° using factors ({f_lat},{f_lon}) to 0.5°"
         return out
+
+    # Fallback: only if explicitly allowed
+    if not allow_xesmf:
+        raise RuntimeError(
+            "Grid spacing is not ~0.1° or ~0.25°. "
+            f"Detected dlat={dlat}, dlon={dlon}. "
+            "To regrid, call with allow_xesmf=True (requires xESMF), "
+            "or add an explicit block factor for this spacing."
+        )
+
+    # Optional xESMF path (off by default)
+    import xesmf as xe  # type: ignore
+    lat = da["lat"].values
+    lon = da["lon"].values
+    lat_out = np.arange(-89.75, 90.0, 0.5)
+    lon_out = np.arange(-179.75, 180.0, 0.5)
+    tgt = xr.Dataset(coords={"lat": lat_out, "lon": lon_out})
+    regridder = xe.Regridder(da.to_dataset(name="var"), tgt, "bilinear", periodic=False, reuse_weights=False)
+    out = regridder(da)
+    regridder.clean_weight_file()
+    out.attrs.update(da.attrs)
+    out.attrs["regrid_note"] = "xesmf bilinear to 0.5° (allow_xesmf=True)"
+    return out
+
 
 def era5land_to_1m_monthly_halfdeg_v1(registry) -> xr.DataArray:
     """
     Reads ERA5-Land monthly files (volumetric soil water) from path in data_registry.yml,
     converts to 0–1 m soil moisture (kg m-2), resampled to 0.5° and proleptic_gregorian monthly calendar.
     """
-    import glob
     path_glob = registry.get_obs_raw("era5land")
     files = sorted(glob.glob(path_glob))
     if not files:
@@ -120,15 +134,17 @@ def era5land_to_1m_monthly_halfdeg_v1(registry) -> xr.DataArray:
     ds = xr.open_mfdataset(files, combine="by_coords", parallel=False)
     ds = to_proleptic_monthly(ds)
 
-    # Detect variables
-    for v in ["longitude", "latitude"]:
-        if v in ds:
-            ds = ds.rename({v: v[:3]})  # lon/lat
+    # Normalize coords and detect layer variables
+    if "longitude" in ds.coords:
+        ds = ds.rename({"longitude": "lon"})
+    if "latitude" in ds.coords:
+        ds = ds.rename({"latitude": "lat"})
     ds = _to_lon_m180_180(ds)
+    v1, v2, v3 = _detect_era5l_vars(ds)
 
     # Thickness-weighted 0–1 m integration
     thick = np.array([0.07, 0.21, 0.72])  # m
-    sm = (ds["swvl1"]*thick[0] + ds["swvl2"]*thick[1] + ds["swvl3"]*thick[2]) * 1000.0
+    sm = (ds[v1]*thick[0] + ds[v2]*thick[1] + ds[v3]*thick[2]) * 1000.0
     sm.name = "soilmoist_1m"
 
     # Regrid from 0.1° to 0.5° via block mean
@@ -220,3 +236,70 @@ def gleam42b_2003_2020_v0(registry) -> xr.DataArray:
 # Backward-compatible aliases (old naming)
 gleam42a_full_v0 = gleam42a_1980_2020_v0
 gleam42b_full_v0 = gleam42b_2003_2020_v0
+
+
+def _drop_vars_if_present(ds: xr.Dataset, names: list[str]) -> xr.Dataset:
+    present = [n for n in names if n in ds.variables]
+    return ds.drop_vars(present) if present else ds
+
+def _open_gldas_stack(path_glob: str) -> xr.Dataset:
+    files = sorted(glob.glob(path_glob))
+    if not files:
+        raise FileNotFoundError(f"No GLDAS files matched: {path_glob}")
+    ds = xr.open_mfdataset(files, combine="by_coords", parallel=False)
+    # Normalize coords
+    if "longitude" in ds.coords:
+        ds = ds.rename({"longitude": "lon"})
+    if "latitude" in ds.coords:
+        ds = ds.rename({"latitude": "lat"})
+    ds = _to_lon_m180_180(ds)
+    # Normalize monthly calendar to proleptic_gregorian
+    ds = to_proleptic_monthly(ds)
+    # Drop time bounds to avoid xarray encoding clashes
+    ds = _drop_vars_if_present(ds, ["time_bnds"])
+    return ds
+
+def _gldas_0_1m_sum(ds: xr.Dataset) -> xr.DataArray:
+    needed = ["SoilMoi0_10cm_inst", "SoilMoi10_40cm_inst", "SoilMoi40_100cm_inst"]
+    missing = [v for v in needed if v not in ds.data_vars]
+    if missing:
+        raise KeyError(f"GLDAS: missing required soil moisture vars: {missing}")
+    da = ds[needed[0]] + ds[needed[1]] + ds[needed[2]]
+    da.name = "soilmoist_1m"
+    return da
+
+def gldas_v20_to_1m_monthly_halfdeg_v0(registry) -> xr.DataArray:
+    """GLDAS v2.0 (0.25° monthly): sum 0–100 cm soil moisture layers, block-mean to 0.5°. Units: kg m-2.""" 
+    path_glob = registry.get_obs_raw("gldas_v20")
+    ds = _open_gldas_stack(path_glob)
+    da = _gldas_0_1m_sum(ds)
+    da = _maybe_block_coarsen_to_half_degree(da)
+    da.attrs.update({
+        "units": "kg m-2",
+        "long_name": "GLDAS NOAH v2.0 soil moisture 0–1 m (sum of 0–10,10–40,40–100 cm)",
+        "method": "sum layer masses; block-mean 0.25°→0.5°; monthly proleptic_gregorian",
+        "calendar": "proleptic_gregorian",
+        "source": "GLDAS2.0 NOAH monthly",
+        "target_depth_m": 1.0,
+        "note": "v0 uses provided layer-integrated masses; no ancillary remapping.",
+        "source_files": path_glob,
+    })
+    return da
+
+def gldas_v21_to_1m_monthly_halfdeg_v0(registry) -> xr.DataArray:
+    """GLDAS v2.1 (0.25° monthly): sum 0–100 cm soil moisture layers, block-mean to 0.5°. Units: kg m-2.""" 
+    path_glob = registry.get_obs_raw("gldas_v21")
+    ds = _open_gldas_stack(path_glob)
+    da = _gldas_0_1m_sum(ds)
+    da = _maybe_block_coarsen_to_half_degree(da)
+    da.attrs.update({
+        "units": "kg m-2",
+        "long_name": "GLDAS NOAH v2.1 soil moisture 0–1 m (sum of 0–10,10–40,40–100 cm)",
+        "method": "sum layer masses; block-mean 0.25°→0.5°; monthly proleptic_gregorian",
+        "calendar": "proleptic_gregorian",
+        "source": "GLDAS2.1 NOAH monthly",
+        "target_depth_m": 1.0,
+        "note": "v0 uses provided layer-integrated masses; no ancillary remapping.",
+        "source_files": path_glob,
+    })
+    return da

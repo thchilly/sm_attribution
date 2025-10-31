@@ -77,9 +77,12 @@ observations:
   gleam42b:
     path: "/Users/thchilly/projects/sm_attribution/data/observed/GLEAM/v4.2b/SMrz/SMrz_*_GLEAM_v4.2b_MO.nc"
     notes: "GLEAM v4.2b SMrz monthly (volumetric). Use v0 (no depth remap)."
-  gldas:
-    path: "/Users/thchilly/projects/sm_attribution/data/observed/GLDASv2/*.nc4"
-    notes: "NOAH 0.25°; pick correct variable and layers for 0–1 m integration"
+  gldas_v20:
+    path: "/Users/thchilly/projects/sm_attribution/data/observed/GLDASv2/v2.0/GLDAS_NOAH025_M.A*.020.nc4"
+    notes: "GLDAS-2.0 NOAH025 monthly 0.25° (1948–2014). Variables: SoilMoi* volumetric m³/m³; integrate 0–10, 10–40, and 40–100 cm to approximate 0–1 m (v0)."
+  gldas_v21:
+    path: "/Users/thchilly/projects/sm_attribution/data/observed/GLDASv2/v2.1/GLDAS_NOAH025_M.A*.021.nc4"
+    notes: "GLDAS-2.1 NOAH025 monthly 0.25° (2000–2020). Same layer mapping as v2.0 (v0)."
   # grace-da-dm: add later
   # somo.ml: add later
 
@@ -128,3 +131,5 @@ processed:
     gleam42a_1980_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLEAM/GLEAM_v4.2a_SMrz_monthly_0p5deg_1980_2020_v0.nc"
     gleam42a_2003_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLEAM/GLEAM_v4.2a_SMrz_monthly_0p5deg_2003_2020_v0.nc"
     gleam42b_2003_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLEAM/GLEAM_v4.2b_SMrz_monthly_0p5deg_2003_2020_v0.nc"
+    gldas_v20_1948_2014: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLDAS/GLDAS_NOAH_v2.0_soilmoist_1m_monthly_0p5deg_1948_2014_v0.nc"
+    gldas_v21_2000_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLDAS/GLDAS_NOAH_v2.1_soilmoist_1m_monthly_0p5deg_2000_2020_v0.nc"
