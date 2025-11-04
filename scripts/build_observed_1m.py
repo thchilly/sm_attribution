@@ -2,6 +2,7 @@
 from __future__ import annotations
 import argparse
 from sm_attribution.io.registry import Registry
+import numpy as np
 from sm_attribution.preprocess.observations import (
     era5land_to_1m_monthly_halfdeg_v1,
     gleam42a_1980_2020_v0,
@@ -9,6 +10,7 @@ from sm_attribution.preprocess.observations import (
     gleam42b_2003_2020_v0,
     gldas_v20_to_1m_monthly_halfdeg_v0,
     gldas_v21_to_1m_monthly_halfdeg_v0,
+    somoml_to_0p5m_monthly_halfdeg_v0,
 )
 
 def main():
@@ -23,6 +25,7 @@ def main():
             "gleam42b_2003_2020",
             "gldas_v20_1948_2014",
             "gldas_v21_2000_2020",
+            "somo_ml",
         ],
     )
     ap.add_argument("--registry", default="configs/data_registry.yml")
@@ -30,30 +33,51 @@ def main():
 
     reg = Registry(args.registry)
 
+    ds_out = None
     if args.dataset == "era5land":
         da = era5land_to_1m_monthly_halfdeg_v1(reg)
         out_path = reg.get_obs_processed("era5land")
+        ds_out = da.to_dataset(name="soilmoist_1m")
     elif args.dataset == "gleam42a_1980_2020":
         da = gleam42a_1980_2020_v0(reg)
         out_path = reg.get_obs_processed("gleam42a_1980_2020")
+        ds_out = da.to_dataset(name="soilmoist_1m")
     elif args.dataset == "gleam42a_2003_2020":
         da = gleam42a_2003_2020_v0(reg)
         out_path = reg.get_obs_processed("gleam42a_2003_2020")
+        ds_out = da.to_dataset(name="soilmoist_1m")
     elif args.dataset == "gleam42b_2003_2020":
         da = gleam42b_2003_2020_v0(reg)
         out_path = reg.get_obs_processed("gleam42b_2003_2020")
+        ds_out = da.to_dataset(name="soilmoist_1m")
     elif args.dataset == "gldas_v20_1948_2014":
         da = gldas_v20_to_1m_monthly_halfdeg_v0(reg)
         out_path = reg.get_obs_processed("gldas_v20_1948_2014")
+        ds_out = da.to_dataset(name="soilmoist_1m")
     elif args.dataset == "gldas_v21_2000_2020":
         da = gldas_v21_to_1m_monthly_halfdeg_v0(reg)
         out_path = reg.get_obs_processed("gldas_v21_2000_2020")
+        ds_out = da.to_dataset(name="soilmoist_1m")
+    elif args.dataset == "somo_ml":
+        ds_out = somoml_to_0p5m_monthly_halfdeg_v0(reg)
+        out_path = reg.get_obs_processed("somo_ml_0p5m_2000_2019")
     else:
-        raise NotImplementedError(args.dataset)
+        raise ValueError(f"Unknown dataset: {args.dataset}")
 
-    enc = {da.name: {"zlib": True, "complevel": 4, "dtype": "float32", "_FillValue": -9999.0}}
-    da.to_dataset().to_netcdf(out_path, encoding=enc)
-    print(f"WROTE: {out_path}")
+    if ds_out is not None:
+        # netCDF encoding: compression + fill values
+        encoding = {
+            "soilmoist_1m": {
+                "dtype": "float32",
+                "zlib": True,
+                "complevel": 4,
+                "_FillValue": np.float32(-9999.0),
+                "chunksizes": (12, 180, 360),  # monthly x 0.5° grid
+            }
+        }
+        ds_out.to_netcdf(out_path, encoding=encoding)
+        print(f"[OK] wrote {out_path}")
+
 
 if __name__ == "__main__":
     main()

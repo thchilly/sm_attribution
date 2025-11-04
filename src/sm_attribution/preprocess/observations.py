@@ -303,3 +303,117 @@ def gldas_v21_to_1m_monthly_halfdeg_v0(registry) -> xr.DataArray:
         "source_files": path_glob,
     })
     return da
+
+def _open_somoml_layer(registry, key: str, var_name: str) -> xr.DataArray:
+    """Open all yearly files for one SoMo.ml layer and return a daily DataArray."""
+    pat = registry.get_obs_raw(key)  # glob pattern like .../SoMo.ml_v1_layer1/*.nc
+    files = sorted(glob.glob(pat))
+    if not files:
+        raise FileNotFoundError(f"SoMo.ml: no files found for pattern: {pat}")
+    ds = xr.open_mfdataset(
+        files,
+        combine="by_coords",
+        parallel=False,
+        decode_times=True,
+        engine="netcdf4",
+    )
+    # Some files have the variable named exactly as layer1/layer2/layer3
+    if var_name not in ds:
+        # try to find the only data var if necessary
+        data_vars = [v for v in ds.data_vars]
+        if len(data_vars) == 1:
+            ds = ds.rename({data_vars[0]: var_name})
+        else:
+            raise KeyError(f"Expected variable {var_name} not found in SoMo.ml files.")
+    da = ds[var_name]
+    # Ensure lat ascending & lon in [-180,180) if needed
+    if "lat" in da.coords and (da.lat[0] > da.lat[-1]):
+        da = da.sortby("lat")
+    if "lon" in da.coords and (da.lon.max() > 180.0):
+        # Convert [0,360) to [-180,180)
+        da = da.assign_coords(lon=((da.lon + 180) % 360) - 180).sortby("lon")
+    return da
+
+def _somoml_daily_to_monthly(da: xr.DataArray) -> xr.DataArray:
+    """Daily to monthly mean, month-start timestamps (MS)."""
+    # Using resample to handle leap years, etc.
+    return da.resample(time="MS").mean("time", skipna=True)
+
+def _somoml_depth_weighted_volumetric(l1: xr.DataArray, l2: xr.DataArray, l3: xr.DataArray) -> xr.DataArray:
+    """
+    Depth-weighted volumetric average (m3/m3) across 0–50 cm:
+      layer1: 0–10 cm (0.1 m)
+      layer2: 10–30 cm (0.2 m)
+      layer3: 30–50 cm (0.2 m)
+    """
+    w1, w2, w3 = 0.1, 0.2, 0.2  # meters
+    depth = w1 + w2 + w3        # 0.5 m
+    return (w1*l1 + w2*l2 + w3*l3) / depth
+
+def _somoml_volumetric_to_mass(theta_0p5m: xr.DataArray) -> xr.DataArray:
+    """Convert volumetric (m3/m3) to water mass per area (kg/m2) over 0.5 m."""
+    rho_w = 1000.0  # kg/m3
+    depth_m = 0.5   # meters
+    return theta_0p5m * rho_w * depth_m
+
+
+def somoml_to_0p5m_monthly_halfdeg_v0(registry) -> xr.Dataset:
+    """
+    Build SoMo.ml 0–50 cm product as monthly means on 0.5° grid. Output Dataset contains a standardized variable 'soilmoist_1m' (depth documented as 0–0.5 m).
+    """
+    # 1) Load daily for each layer
+    l1 = _open_somoml_layer(registry, "somo_ml_layer1", "layer1")
+    l2 = _open_somoml_layer(registry, "somo_ml_layer2", "layer2")
+    l3 = _open_somoml_layer(registry, "somo_ml_layer3", "layer3")
+
+    # 2) Daily → monthly means
+    l1m = _somoml_daily_to_monthly(l1)
+    l2m = _somoml_daily_to_monthly(l2)
+    l3m = _somoml_daily_to_monthly(l3)
+
+    # 3) Align months
+    l1m, l2m = xr.align(l1m, l2m, join="inner")
+    l1m, l3m = xr.align(l1m, l3m, join="inner")
+
+    # 4) Depth-weighted volumetric average over 0–50 cm
+    theta_0p5m = _somoml_depth_weighted_volumetric(l1m, l2m, l3m)
+
+    # 5) Convert to kg m-2 (water column over 0.5 m)
+    sm_kgm2 = _somoml_volumetric_to_mass(theta_0p5m)
+
+    # 6) Regrid to 0.5° by block-mean if needed
+    sm_kgm2_05 = _maybe_block_coarsen_to_half_degree(sm_kgm2)
+
+    # 7) Pack to Dataset with standardized variable name for compatibility
+    da = sm_kgm2_05.astype("float32").drop_vars([v for v in sm_kgm2_05.coords if v not in ("time","lat","lon")], errors="ignore")
+    da = da.where(np.isfinite(da), other=np.float32(-9999.0))
+    da.name = "soilmoist_1m"  # keep the same name used elsewhere in your pipeline
+
+    da.attrs.update({
+        "standard_name": "soil_moisture_content",
+        "long_name": "SoMo.ml depth-integrated soil moisture (0–0.5 m) converted to water mass",
+        "units": "kg m-2",
+        "source_product": "SoMo.ml v1 (layer1 0–10 cm, layer2 10–30 cm, layer3 30–50 cm)",
+        "native_units": "m3 m-3 (volumetric)",
+        "conversion": "theta * 1000 kg/m3 * 0.5 m",
+        "depth_m": 0.5,
+        "processing_version": "v0",
+        "regridding": "0.25°→0.5° by 2x2 block mean",
+    })
+
+    ds_out = da.to_dataset()
+
+    # Coordinates tidy-up
+    for c in ("lat", "lon"):
+        if c in ds_out.coords:
+            ds_out[c].attrs.pop("_FillValue", None)
+
+    # Global attrs
+    ds_out.attrs.update({
+        "title": "SoMo.ml 0–50 cm soil moisture (monthly, 0.5°), converted to kg m-2",
+        "comment": "Depth is 0–0.5 m; variable kept as 'soilmoist_1m' for pipeline compatibility.",
+        "institution": "Your lab / project",
+        "history": "SoMo.ml layer1/2/3 daily → monthly mean; depth-weighted; mass conversion; block coarsen to 0.5°.",
+    })
+
+    return ds_out

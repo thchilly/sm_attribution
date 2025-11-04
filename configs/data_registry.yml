@@ -83,8 +83,16 @@ observations:
   gldas_v21:
     path: "/Users/thchilly/projects/sm_attribution/data/observed/GLDASv2/v2.1/GLDAS_NOAH025_M.A*.021.nc4"
     notes: "GLDAS-2.1 NOAH025 monthly 0.25° (2000–2020). Same layer mapping as v2.0 (v0)."
+  somo_ml_layer1:
+    path: "/Users/thchilly/projects/sm_attribution/data/observed/SOMO-ML/SoMo.ml_v1_layer1/SoMo.ml_v1_layer1_*.nc"
+    notes: "SoMo.ml v1 Layer 1 (0–10 cm), volumetric (m^3 m^-3). Annual NetCDF per year; will be aggregated to monthly and regridded to 0.5°."
+  somo_ml_layer2:
+    path: "/Users/thchilly/projects/sm_attribution/data/observed/SOMO-ML/SoMo.ml_v1_layer2/SoMo.ml_v1_layer2_*.nc"
+    notes: "SoMo.ml v1 Layer 2 (10–30 cm), volumetric (m^3 m^-3). Annual NetCDF per year; will be aggregated to monthly and regridded to 0.5°."
+  somo_ml_layer3:
+    path: "/Users/thchilly/projects/sm_attribution/data/observed/SOMO-ML/SoMo.ml_v1_layer3/SoMo.ml_v1_layer3_*.nc"
+    notes: "SoMo.ml v1 Layer 3 (30–50 cm), volumetric (m^3 m^-3). Annual NetCDF per year; will be aggregated to monthly and regridded to 0.5°."
   # grace-da-dm: add later
-  # somo.ml: add later
 
 # --------------------------------------------------------------------
 # PROCESSED OUTPUTS — after homogenization to 0–1 m (models + observations)
@@ -133,3 +141,4 @@ processed:
     gleam42b_2003_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLEAM/GLEAM_v4.2b_SMrz_monthly_0p5deg_2003_2020_v0.nc"
     gldas_v20_1948_2014: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLDAS/GLDAS_NOAH_v2.0_soilmoist_1m_monthly_0p5deg_1948_2014_v0.nc"
     gldas_v21_2000_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLDAS/GLDAS_NOAH_v2.1_soilmoist_1m_monthly_0p5deg_2000_2020_v0.nc"
+    somo_ml_0p5m_2000_2019: "/Users/thchilly/projects/sm_attribution/data/observed_1m/SoMo-ML/SoMoML_v1_soilmoist_0p5m_monthly_0p5deg_2000_2019_v0.nc"
