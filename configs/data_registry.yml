@@ -92,6 +92,9 @@ observations:
   somo_ml_layer3:
     path: "/Users/thchilly/projects/sm_attribution/data/observed/SOMO-ML/SoMo.ml_v1_layer3/SoMo.ml_v1_layer3_*.nc"
     notes: "SoMo.ml v1 Layer 3 (30–50 cm), volumetric (m^3 m^-3). Annual NetCDF per year; will be aggregated to monthly and regridded to 0.5°."
+  gracedadm_weekly:
+    path: "/Users/thchilly/projects/sm_attribution/data/observed/GRACEDADM/raw_weekly_files/GRACEDADM_CLSM025GL_7D.A*.030.nc4"
+    notes: "GRACE-DA-DM Global v3.0 weekly percentiles (sfsm_inst, rtzsm_inst, gws_inst), 0.25°. Aggregate to monthly and coarsen to 0.5°. Use rtzsm_inst for root-zone."
   # grace-da-dm: add later
 
 # --------------------------------------------------------------------
@@ -142,3 +145,4 @@ processed:
     gldas_v20_1948_2014: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLDAS/GLDAS_NOAH_v2.0_soilmoist_1m_monthly_0p5deg_1948_2014_v0.nc"
     gldas_v21_2000_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLDAS/GLDAS_NOAH_v2.1_soilmoist_1m_monthly_0p5deg_2000_2020_v0.nc"
     somo_ml_0p5m_2000_2019: "/Users/thchilly/projects/sm_attribution/data/observed_1m/SoMo-ML/SoMoML_v1_soilmoist_0p5m_monthly_0p5deg_2000_2019_v0.nc"
+    gracedadm_2003_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GRACEDADM/GRACEDADM_CLSM025GL_rootzone_percentile_monthly_0p5deg_2003_2020_v0.nc"

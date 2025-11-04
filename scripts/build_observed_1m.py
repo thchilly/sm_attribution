@@ -11,6 +11,7 @@ from sm_attribution.preprocess.observations import (
     gldas_v20_to_1m_monthly_halfdeg_v0,
     gldas_v21_to_1m_monthly_halfdeg_v0,
     somoml_to_0p5m_monthly_halfdeg_v0,
+    gracedadm_rootzone_to_monthly_halfdeg_v0,
 )
 
 def main():
@@ -26,6 +27,7 @@ def main():
             "gldas_v20_1948_2014",
             "gldas_v21_2000_2020",
             "somo_ml",
+            "gracedadm_rootzone_2003_2020",
         ],
     )
     ap.add_argument("--registry", default="configs/data_registry.yml")
@@ -61,18 +63,23 @@ def main():
     elif args.dataset == "somo_ml":
         ds_out = somoml_to_0p5m_monthly_halfdeg_v0(reg)
         out_path = reg.get_obs_processed("somo_ml_0p5m_2000_2019")
+    elif args.dataset == "gracedadm_rootzone_2003_2020":
+        da = gracedadm_rootzone_to_monthly_halfdeg_v0(reg)
+        out_path = reg.get_obs_processed("gracedadm_2003_2020")
+        ds_out = da.to_dataset(name="rootzone_percentile")
     else:
         raise ValueError(f"Unknown dataset: {args.dataset}")
 
     if ds_out is not None:
         # netCDF encoding: compression + fill values
+        var_name = "rootzone_percentile" if args.dataset == "gracedadm_rootzone_2003_2020" else "soilmoist_1m"
         encoding = {
-            "soilmoist_1m": {
+            var_name: {
                 "dtype": "float32",
                 "zlib": True,
                 "complevel": 4,
                 "_FillValue": np.float32(-9999.0),
-                "chunksizes": (12, 180, 360),  # monthly x 0.5° grid
+                "chunksizes": (12, 180, 360),
             }
         }
         ds_out.to_netcdf(out_path, encoding=encoding)

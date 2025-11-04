@@ -161,6 +161,91 @@ def era5land_to_1m_monthly_halfdeg_v1(registry) -> xr.DataArray:
     return sm
 
 # -----------------------------------------------------------------------------
+# GRACE-DA-DM (Global V3.0) — root-zone percentile → monthly 0.5° (v0)
+# -----------------------------------------------------------------------------
+
+def _open_gracedadm_weekly_stack(registry) -> xr.Dataset:
+    """Open all GRACE-DA-DM weekly files and normalize coordinates.
+    Expects a glob from registry key 'gracedadm_weekly'.
+    """
+    path_glob = registry.get_obs_raw("gracedadm_weekly")
+    files = sorted(glob.glob(path_glob))
+    if not files:
+        raise FileNotFoundError(f"No GRACE-DA-DM files matched: {path_glob}")
+    ds = xr.open_mfdataset(
+        files,
+        combine="by_coords",
+        parallel=False,
+        decode_times=True,
+        engine="netcdf4",
+        mask_and_scale=True,
+    )
+    # Normalize coord names and longitudes
+    if "longitude" in ds.coords and "lon" not in ds.coords:
+        ds = ds.rename({"longitude": "lon"})
+    if "latitude" in ds.coords and "lat" not in ds.coords:
+        ds = ds.rename({"latitude": "lat"})
+    ds = _to_lon_m180_180(ds)
+
+    # Ensure lat ascending
+    if "lat" in ds.coords and (ds.lat.size > 1) and (ds.lat[1] < ds.lat[0]):
+        ds = ds.sortby("lat")
+
+    return ds
+
+
+def gracedadm_rootzone_to_monthly_halfdeg_v0(registry) -> xr.DataArray:
+    """
+    Build GRACE-DA-DM root-zone soil moisture percentile product as monthly means
+    on a 0.5° grid (v0). We simply average percentiles in time (weekly→monthly)
+    and in space (0.25°→0.5°) via block means.
+
+    Output variable is a percentile (0–100), dimensioned (time, lat, lon).
+    Period clipped to 2003-02 through 2020-12 to match the study window.
+    """
+    ds = _open_gracedadm_weekly_stack(registry)
+
+    if "rtzsm_inst" not in ds.data_vars:
+        # Some distributions might use alternative short names; be strict for now
+        raise KeyError("Expected variable 'rtzsm_inst' (root zone soil moisture percentile) in GRACE-DA-DM files.")
+
+    da = ds["rtzsm_inst"].astype("float32")
+
+    # Replace fill values (-999) with NaN if present
+    fill = da.encoding.get("_FillValue", None)
+    if fill is None:
+        fill = da.attrs.get("_FillValue", None)
+    if fill is None:
+        fill = da.attrs.get("missing_value", None)
+    if fill is not None:
+        da = da.where(da != np.float32(fill))
+    else:
+        da = da.where(np.isfinite(da))
+
+    # Clip the time span explicitly
+    da = da.sel(time=slice("2003-02-01", "2020-12-31"))
+
+    # Weekly → monthly mean, month-start timestamps
+    da_m = da.resample(time="MS").mean("time", skipna=True)
+
+    # 0.25° → 0.5° block mean (intensive variable: percentile)
+    da_05 = _maybe_block_coarsen_to_half_degree(da_m)
+
+    # Name & attributes
+    da_05.name = "rootzone_percentile"
+    da_05.attrs.update({
+        "units": "%",
+        "long_name": "GRACE-DA-DM root-zone soil moisture percentile (monthly mean)",
+        "standard_name": "root_zone_soil_moisture_percentile",
+        "method": "weekly percentiles averaged to monthly means; 0.25°→0.5° block mean",
+        "note": "Percentiles (0–100) are averaged in time/space as a pragmatic summary statistic.",
+        "calendar": "proleptic_gregorian",
+        "source": "GRACEDADM_CLSM025GL_7D v3.0",
+    })
+
+    return da_05
+
+# -----------------------------------------------------------------------------
 # GLEAM v4.2 (SMrz) — v0 processing (keep volumetric root-zone moisture)
 # Outputs:
 #  - v4.2a 1980–2020
