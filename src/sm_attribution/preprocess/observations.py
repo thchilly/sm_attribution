@@ -42,6 +42,18 @@ def _to_lon_m180_180(ds: xr.Dataset) -> xr.Dataset:
         ds = ds.assign_coords(lon=lon_new).sortby("lon")
     return ds
 
+# Replace fill values with NaN; otherwise keep only finite values.
+def _nan_fill(da: xr.DataArray) -> xr.DataArray:
+    """Replace encoded/attr fill values with NaN; otherwise keep only finite values."""
+    fill = da.encoding.get("_FillValue", None)
+    if fill is None:
+        fill = da.attrs.get("_FillValue", None)
+    if fill is None:
+        fill = da.attrs.get("missing_value", None)
+    if fill is not None:
+        return da.where(da != np.float32(fill))
+    return da.where(np.isfinite(da))
+
 def _maybe_block_coarsen_to_half_degree(
     da: xr.DataArray,
     *,
@@ -502,3 +514,97 @@ def somoml_to_0p5m_monthly_halfdeg_v0(registry) -> xr.Dataset:
     })
 
     return ds_out
+
+def _interp_lon_to_half_degree(da: xr.DataArray) -> xr.DataArray:
+    """
+    For inputs on 0.625° lon spacing (e.g., MERRA-2), remap longitude to 0.5° by 1D linear interpolation.
+    Leaves latitude unchanged (already 0.5° in MERRA-2).
+    """
+    if "lon" not in da.coords:
+        raise ValueError("DataArray must have 'lon' coordinate.")
+    # Ensure lon in [-180,180)
+    da = _to_lon_m180_180(da.to_dataset(name="var"))["var"]
+    lon_out = np.arange(-179.75, 180.0, 0.5)  # 0.5° centers
+    # Interpolate only along lon
+    out = da.interp(lon=lon_out, method="linear")
+    out.attrs.update(da.attrs)
+    out.attrs["regrid_note"] = "1D linear lon interpolation 0.625°→0.5° for MERRA-2"
+    return out
+def merra2_land_to_1m_monthly_halfdeg_v1(registry) -> xr.DataArray:
+    """
+    Build MERRA-2 LAND 0–1 m soil moisture (kg m-2) using a depth-weighted blend:
+      - SFMC (surface layer volumetric, 0–0.05 m) with weight 0.05
+      - RZMC (root-zone volumetric, 0.05–1.0 m) with weight 0.95
+    We treat SFMC and RZMC as volumetric water content (m3 m-3) over their respective layers,
+    compute a depth-weighted average theta over 0–1 m, convert to kg m-2, regrid to 0.5° monthly
+    on a proleptic_gregorian calendar.
+
+    Notes:
+    - Native grid: 0.5° (lat) × 0.625° (lon).
+    - Time is monthly means with non-standard units; converted via to_proleptic_monthly.
+    """
+    path_glob = registry.get_obs_raw("merra2_land")
+    files = sorted(glob.glob(path_glob))
+    if not files:
+        raise FileNotFoundError(f"No MERRA2-LAND files found at {path_glob}")
+
+    # Open and normalize coordinates
+    ds = xr.open_mfdataset(files, combine="by_coords", parallel=False)
+    ds = to_proleptic_monthly(ds)
+
+    if "longitude" in ds.coords and "lon" not in ds.coords:
+        ds = ds.rename({"longitude": "lon"})
+    if "latitude" in ds.coords and "lat" not in ds.coords:
+        ds = ds.rename({"latitude": "lat"})
+    ds = _to_lon_m180_180(ds)
+
+    # Required variables
+    for v in ("SFMC", "RZMC"):
+        if v not in ds.data_vars:
+            raise KeyError(f"MERRA2-LAND: required variable '{v}' not found.")
+
+    sfmc = ds["SFMC"].astype("float32")
+    rzmc = ds["RZMC"].astype("float32")
+    sfmc = _nan_fill(sfmc)
+    rzmc = _nan_fill(rzmc)
+
+    # Volumetric blend: 5% surface (0–5 cm) + 95% root-zone proxy
+    theta = 0.05 * sfmc + 0.95 * rzmc  # m3/m3
+
+    # Convert volumetric to kg m-2 over 1 m
+    rho_w = 1000.0  # kg/m3
+    depth_m = 1.0
+    sm = theta * rho_w * depth_m
+    sm.name = "soilmoist_1m"
+    sm.attrs.update({
+        "units": "kg m-2",
+        "long_name": "MERRA-2 0–1 m soil moisture (5% SFMC + 95% RZMC → mass)",
+        "method": "theta = 0.05*SFMC + 0.95*RZMC; soilmoist = theta*1000*1.0",
+        "calendar": "proleptic_gregorian",
+        "target_depth_m": 1.0,
+        "source_files": path_glob,
+        "note": "Depth weights follow project decision; constants not read from ancillary files.",
+    })
+
+    # Regrid lon: 0.625° → 0.5° without xESMF (linear lon interp)
+    sm_05 = _interp_lon_to_half_degree(sm)
+    sm_05 = sm_05.astype("float32")
+
+    # Ensure ascending lat for consistency
+    if sm_05["lat"].size > 1 and sm_05["lat"][1] < sm_05["lat"][0]:
+        sm_05 = sm_05.sortby("lat")
+
+
+    # Attributes
+    sm_05.attrs.update({
+        "units": "kg m-2",
+        "long_name": "MERRA-2 0–1 m soil moisture (SFMC 0–0.05 m and RZMC 0.05–1.0 m depth-weighted)",
+        "standard_name": "soil_moisture_content",
+        "method": "theta = (0.05*SFMC + 0.95*RZMC)/1.0; soilmoist = theta * 1000 kg/m3 * 1.0 m; linear interpolation to 0.5°",
+        "calendar": "proleptic_gregorian",
+        "target_depth_m": 1.0,
+        "source_files": path_glob,
+        "native_grid": "0.5° lat × 0.625° lon",
+        "weights_note": "dzsf=0.05 m and dzrz=0.95 m as global constants.",
+    })
+    return sm_05

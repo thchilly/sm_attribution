@@ -96,6 +96,9 @@ observations:
     path: "/Users/thchilly/projects/sm_attribution/data/observed/GRACEDADM/raw_weekly_files/GRACEDADM_CLSM025GL_7D.A*.030.nc4"
     notes: "GRACE-DA-DM Global v3.0 weekly percentiles (sfsm_inst, rtzsm_inst, gws_inst), 0.25°. Aggregate to monthly and coarsen to 0.5°. Use rtzsm_inst for root-zone."
   # grace-da-dm: add later
+  merra2_land:
+    path: "/Users/thchilly/projects/sm_attribution/data/observed/MERRA2-LAND/raw_files/MERRA2_*.tavgM_2d_lnd_Nx.*.nc4"
+    notes: "MERRA-2 Land (tavgM_2d_lnd_Nx, monthly 0.5°×0.625°). Variables: SFMC and RZMC volumetric (m³/m³). Use blended 0.05×SFMC + 0.95×RZMC to create 0–1 m equivalent (1980–2020)."
 
 # --------------------------------------------------------------------
 # PROCESSED OUTPUTS — after homogenization to 0–1 m (models + observations)
@@ -146,3 +149,4 @@ processed:
     gldas_v21_2000_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLDAS/GLDAS_NOAH_v2.1_soilmoist_1m_monthly_0p5deg_2000_2020_v0.nc"
     somo_ml_0p5m_2000_2019: "/Users/thchilly/projects/sm_attribution/data/observed_1m/SoMo-ML/SoMoML_v1_soilmoist_0p5m_monthly_0p5deg_2000_2019_v0.nc"
     gracedadm_2003_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GRACEDADM/GRACEDADM_CLSM025GL_rootzone_percentile_monthly_0p5deg_2003_2020_v0.nc"
+    merra2_1980_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/MERRA2-LAND/MERRA2L_soilmoist_1m_monthly_0p5deg_1980_2020_v0.nc"

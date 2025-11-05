@@ -12,6 +12,7 @@ from sm_attribution.preprocess.observations import (
     gldas_v21_to_1m_monthly_halfdeg_v0,
     somoml_to_0p5m_monthly_halfdeg_v0,
     gracedadm_rootzone_to_monthly_halfdeg_v0,
+    merra2_land_to_1m_monthly_halfdeg_v1,
 )
 
 def main():
@@ -28,6 +29,7 @@ def main():
             "gldas_v21_2000_2020",
             "somo_ml",
             "gracedadm_rootzone_2003_2020",
+            "merra2_1980_2020",
         ],
     )
     ap.add_argument("--registry", default="configs/data_registry.yml")
@@ -67,6 +69,10 @@ def main():
         da = gracedadm_rootzone_to_monthly_halfdeg_v0(reg)
         out_path = reg.get_obs_processed("gracedadm_2003_2020")
         ds_out = da.to_dataset(name="rootzone_percentile")
+    elif args.dataset == "merra2_1980_2020":
+        da = merra2_land_to_1m_monthly_halfdeg_v1(reg)
+        out_path = reg.get_obs_processed("merra2_1980_2020")
+        ds_out = da.to_dataset(name="soilmoist_1m")
     else:
         raise ValueError(f"Unknown dataset: {args.dataset}")
 
