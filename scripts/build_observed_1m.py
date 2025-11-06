@@ -21,7 +21,7 @@ def main():
         "--dataset",
         required=True,
         choices=[
-            "era5land",
+            "era5land_1980_2010",
             "gleam42a_1980_2020",
             "gleam42a_2003_2020",
             "gleam42b_2003_2020",
@@ -30,6 +30,7 @@ def main():
             "somo_ml",
             "gracedadm_rootzone_2003_2020",
             "merra2_1980_2020",
+            "gdo_ensmia_2001_2020",
         ],
     )
     ap.add_argument("--registry", default="configs/data_registry.yml")
@@ -38,9 +39,9 @@ def main():
     reg = Registry(args.registry)
 
     ds_out = None
-    if args.dataset == "era5land":
+    if args.dataset == "era5land_1980_2010":
         da = era5land_to_1m_monthly_halfdeg_v1(reg)
-        out_path = reg.get_obs_processed("era5land")
+        out_path = reg.get_obs_processed("era5land_1980_2010")
         ds_out = da.to_dataset(name="soilmoist_1m")
     elif args.dataset == "gleam42a_1980_2020":
         da = gleam42a_1980_2020_v0(reg)
@@ -73,12 +74,22 @@ def main():
         da = merra2_land_to_1m_monthly_halfdeg_v1(reg)
         out_path = reg.get_obs_processed("merra2_1980_2020")
         ds_out = da.to_dataset(name="soilmoist_1m")
+    elif args.dataset == "gdo_ensmia_2001_2020":
+        from sm_attribution.preprocess.observations import gdo_ensmia_to_monthly_halfdeg_v0
+        da = gdo_ensmia_to_monthly_halfdeg_v0(reg)
+        out_path = reg.get_obs_processed("gdo_ensmia_2001_2020")
+        ds_out = da.to_dataset(name="soilmoist_anom_std")
     else:
         raise ValueError(f"Unknown dataset: {args.dataset}")
 
     if ds_out is not None:
         # netCDF encoding: compression + fill values
-        var_name = "rootzone_percentile" if args.dataset == "gracedadm_rootzone_2003_2020" else "soilmoist_1m"
+        if args.dataset == "gracedadm_rootzone_2003_2020":
+            var_name = "rootzone_percentile"
+        elif args.dataset == "gdo_ensmia_2001_2020":
+            var_name = "soilmoist_anom_std"
+        else:
+            var_name = "soilmoist_1m"
         encoding = {
             var_name: {
                 "dtype": "float32",

@@ -608,3 +608,71 @@ def merra2_land_to_1m_monthly_halfdeg_v1(registry) -> xr.DataArray:
         "weights_note": "dzsf=0.05 m and dzrz=0.95 m as global constants.",
     })
     return sm_05
+
+# -----------------------------------------------------------------------------
+# GDO-ENSMIA (Ensemble Soil Moisture Anomaly, JRC) — v0
+# -----------------------------------------------------------------------------
+
+def _open_gdo_ensmia_stack(registry) -> xr.Dataset:
+    """Open all GDO-ENSMIA anomaly files and normalize coordinates."""
+    path_glob = registry.get_obs_raw("gdo_ensmia")
+    files = sorted(glob.glob(path_glob))
+    if not files:
+        raise FileNotFoundError(f"No GDO-ENSMIA files matched: {path_glob}")
+    ds = xr.open_mfdataset(
+        files,
+        combine="by_coords",
+        parallel=False,
+        decode_times=True,
+        engine="netcdf4",
+        mask_and_scale=True,
+    )
+
+    # Normalize coordinate names
+    if "longitude" in ds.coords and "lon" not in ds.coords:
+        ds = ds.rename({"longitude": "lon"})
+    if "latitude" in ds.coords and "lat" not in ds.coords:
+        ds = ds.rename({"latitude": "lat"})
+    ds = _to_lon_m180_180(ds)
+
+    # Ensure ascending latitude
+    if "lat" in ds.coords and (ds.lat.size > 1) and (ds.lat[1] < ds.lat[0]):
+        ds = ds.sortby("lat")
+
+    return ds
+
+
+def gdo_ensmia_to_monthly_halfdeg_v0(registry) -> xr.DataArray:
+    """
+    Build GDO Ensemble Soil Moisture Index product (v0):
+      - Select 3rd dekad (last timestep) per month → monthly
+      - Coarsen spatially from 0.1° → 0.5° via block mean
+      - Output standardized anomaly (-3 to 3, dimensionless)
+    """
+    ds = _open_gdo_ensmia_stack(registry)
+
+    if "smant" not in ds.data_vars:
+        raise KeyError("Expected variable 'smant' in GDO-ENSMIA files.")
+
+    da = ds["smant"].astype("float32")
+    da = _nan_fill(da)
+
+    # Keep only last timestep (3rd dekad) per month using resample bins
+    # Resample to month-start bins and select the final element from each bin.
+    # This avoids reliance on unsupported virtual coords like time.to_period('M').
+    da_monthly = da.resample(time="MS").map(lambda x: x.isel(time=-1))
+
+    # Coarsen spatially 0.1° → 0.5° (mean of standardized index)
+    da_05 = _maybe_block_coarsen_to_half_degree(da_monthly)
+
+    da_05.name = "soilmoist_anom_std"
+    da_05.attrs.update({
+        "units": "dimensionless",
+        "long_name": "GDO Ensemble Soil Moisture Anomaly (standardized index)",
+        "method": "selected 3rd dekad per month; block-mean 0.1°→0.5°",
+        "calendar": "proleptic_gregorian",
+        "note": "Index represents standardized anomalies (-3 to +3) derived from LISFLOOD, MODIS LST, and ESA CCI.",
+        "source": "Global Drought Observatory, JRC (2001–2020)",
+    })
+
+    return da_05

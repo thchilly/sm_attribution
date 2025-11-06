@@ -69,7 +69,7 @@ models:
 # RAW OBSERVATIONS (use only NetCDF/NC4; ignore .mat/.m files)
 observations:
   era5land:
-    path: "/Users/thchilly/projects/sm_attribution/data/observed/ERA5/*.nc"
+    path: "/Users/thchilly/projects/sm_attribution/data/observed/ERA5-LAND/*.nc"
     notes: "ERA5-Land monthly files (1980–2010). Variables: swvl1..swvl4 volumetric m³/m³. Use first three layers for 0–1 m integration."
   gleam42a:
     path: "/Users/thchilly/projects/sm_attribution/data/observed/GLEAM/v4.2a/SMrz/SMrz_*_GLEAM_v4.2a_MO.nc"
@@ -99,6 +99,10 @@ observations:
   merra2_land:
     path: "/Users/thchilly/projects/sm_attribution/data/observed/MERRA2-LAND/raw_files/MERRA2_*.tavgM_2d_lnd_Nx.*.nc4"
     notes: "MERRA-2 Land (tavgM_2d_lnd_Nx, monthly 0.5°×0.625°). Variables: SFMC and RZMC volumetric (m³/m³). Use blended 0.05×SFMC + 0.95×RZMC to create 0–1 m equivalent (1980–2020)."
+
+  gdo_ensmia:
+    path: "/Users/thchilly/projects/sm_attribution/data/observed/GDO-ENSMIA/smant_m_wld_*.nc"
+    notes: "GDO Ensemble Soil Moisture Anomaly (ten-daily standardized anomaly, 0.1°). Preprocess: select 3rd dekad per month (full-month window), then 0.1°→0.5° by 5×5 block mean. Units: dimensionless; baseline 2001–2016."
 
 # --------------------------------------------------------------------
 # PROCESSED OUTPUTS — after homogenization to 0–1 m (models + observations)
@@ -141,7 +145,7 @@ processed:
       counterclim_1901soc:    "/Users/thchilly/projects/sm_attribution/data/models_1m/lpjml5-7-10-fire_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
 
   observed_1m:
-    era5land: "/Users/thchilly/projects/sm_attribution/data/observed_1m/ERA5/ERA5L_soilmoist_1m_monthly_0p5deg_1980_2010.nc"
+    era5land_1980_2010: "/Users/thchilly/projects/sm_attribution/data/observed_1m/ERA5-LAND/ERA5L_soilmoist_1m_monthly_0p5deg_1980_2010.nc"
     gleam42a_1980_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLEAM/GLEAM_v4.2a_SMrz_monthly_0p5deg_1980_2020_v0.nc"
     gleam42a_2003_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLEAM/GLEAM_v4.2a_SMrz_monthly_0p5deg_2003_2020_v0.nc"
     gleam42b_2003_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLEAM/GLEAM_v4.2b_SMrz_monthly_0p5deg_2003_2020_v0.nc"
@@ -150,3 +154,4 @@ processed:
     somo_ml_0p5m_2000_2019: "/Users/thchilly/projects/sm_attribution/data/observed_1m/SoMo-ML/SoMoML_v1_soilmoist_0p5m_monthly_0p5deg_2000_2019_v0.nc"
     gracedadm_2003_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GRACEDADM/GRACEDADM_CLSM025GL_rootzone_percentile_monthly_0p5deg_2003_2020_v0.nc"
     merra2_1980_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/MERRA2-LAND/MERRA2L_soilmoist_1m_monthly_0p5deg_1980_2020_v0.nc"
+    gdo_ensmia_2001_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GDO-ENSMIA/GDO_ENSMIA_soilmoist_anom_std_monthly_0p5deg_2001_2020_v0.nc"
