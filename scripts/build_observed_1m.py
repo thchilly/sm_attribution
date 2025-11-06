@@ -21,7 +21,7 @@ def main():
         "--dataset",
         required=True,
         choices=[
-            "era5land_1980_2010",
+            "era5land_1950_2020",
             "gleam42a_1980_2020",
             "gleam42a_2003_2020",
             "gleam42b_2003_2020",
@@ -39,9 +39,9 @@ def main():
     reg = Registry(args.registry)
 
     ds_out = None
-    if args.dataset == "era5land_1980_2010":
+    if args.dataset == "era5land_1950_2020":
         da = era5land_to_1m_monthly_halfdeg_v1(reg)
-        out_path = reg.get_obs_processed("era5land_1980_2010")
+        out_path = reg.get_obs_processed("era5land_1950_2020")
         ds_out = da.to_dataset(name="soilmoist_1m")
     elif args.dataset == "gleam42a_1980_2020":
         da = gleam42a_1980_2020_v0(reg)

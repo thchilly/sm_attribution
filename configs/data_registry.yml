@@ -69,8 +69,8 @@ models:
 # RAW OBSERVATIONS (use only NetCDF/NC4; ignore .mat/.m files)
 observations:
   era5land:
-    path: "/Users/thchilly/projects/sm_attribution/data/observed/ERA5-LAND/*.nc"
-    notes: "ERA5-Land monthly files (1980–2010). Variables: swvl1..swvl4 volumetric m³/m³. Use first three layers for 0–1 m integration."
+    path: "/Users/thchilly/projects/sm_attribution/data/observed/ERA5-LAND/era5land_soil_moisture_1950_2025.nc"
+    notes: "ERA5-Land monthly (CDS single NetCDF, 1950–2025). Variables: swvl1, swvl2, swvl3 volumetric (m³ m⁻³). Use layers 1–3 for 0–1 m integration; ignore legacy per-year files."
   gleam42a:
     path: "/Users/thchilly/projects/sm_attribution/data/observed/GLEAM/v4.2a/SMrz/SMrz_*_GLEAM_v4.2a_MO.nc"
     notes: "GLEAM v4.2a SMrz monthly (volumetric). Use v0 (no depth remap)."
@@ -145,7 +145,7 @@ processed:
       counterclim_1901soc:    "/Users/thchilly/projects/sm_attribution/data/models_1m/lpjml5-7-10-fire_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
 
   observed_1m:
-    era5land_1980_2010: "/Users/thchilly/projects/sm_attribution/data/observed_1m/ERA5-LAND/ERA5L_soilmoist_1m_monthly_0p5deg_1980_2010.nc"
+    era5land_1950_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/ERA5-LAND/ERA5L_soilmoist_1m_monthly_0p5deg_1950_2020.nc"
     gleam42a_1980_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLEAM/GLEAM_v4.2a_SMrz_monthly_0p5deg_1980_2020_v0.nc"
     gleam42a_2003_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLEAM/GLEAM_v4.2a_SMrz_monthly_0p5deg_2003_2020_v0.nc"
     gleam42b_2003_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLEAM/GLEAM_v4.2b_SMrz_monthly_0p5deg_2003_2020_v0.nc"

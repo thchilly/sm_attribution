@@ -1,5 +1,6 @@
 from __future__ import annotations
 import glob
+import os
 import numpy as np
 import xarray as xr
 
@@ -137,30 +138,73 @@ def era5land_to_1m_monthly_halfdeg_v1(registry) -> xr.DataArray:
     """
     Reads ERA5-Land monthly files (volumetric soil water) from path in data_registry.yml,
     converts to 0–1 m soil moisture (kg m-2), resampled to 0.5° and proleptic_gregorian monthly calendar.
+    Now supports a single CDS NetCDF containing the full period (1950–2025).
     """
-    path_glob = registry.get_obs_raw("era5land")
-    files = sorted(glob.glob(path_glob))
-    if not files:
-        raise FileNotFoundError(f"No ERA5-Land files found at {path_glob}")
+    path = registry.get_obs_raw("era5land")
 
-    ds = xr.open_mfdataset(files, combine="by_coords", parallel=False)
+    # Support both a single file path and a glob pattern
+    files = sorted(glob.glob(path))
+    if len(files) == 1:
+        open_target = files[0]
+    elif len(files) > 1:
+        open_target = files
+    elif os.path.exists(path):
+        open_target = path
+    else:
+        raise FileNotFoundError(f"No ERA5-Land file(s) found at {path}")
+
+    if isinstance(open_target, list):
+        ds = xr.open_mfdataset(
+            open_target,
+            combine="by_coords",
+            parallel=False,
+            engine="netcdf4",
+            chunks={"valid_time": 12, "latitude": 300, "longitude": 600},
+        )
+    else:
+        ds = xr.open_dataset(
+            open_target,
+            engine="netcdf4",
+            chunks={"valid_time": 12, "latitude": 300, "longitude": 600},
+        )
+
+    # Normalize coordinates and time
+    if "longitude" in ds.coords and "lon" not in ds.coords:
+        ds = ds.rename({"longitude": "lon"})
+    if "latitude" in ds.coords and "lat" not in ds.coords:
+        ds = ds.rename({"latitude": "lat"})
+    if "time" not in ds.coords and "valid_time" in ds.coords:
+        ds = ds.rename({"valid_time": "time"})
+
+    # Drop helper/aux vars if present
+    ds = _drop_vars_if_present(ds, ["number", "expver"])
+
+    # Ensure longitudes in [-180,180), lat ascending
+    ds = _to_lon_m180_180(ds)
+    if "lat" in ds.coords and (ds.lat.size > 1) and (ds.lat[1] < ds.lat[0]):
+        ds = ds.sortby("lat")
+
+    # Restrict to requested window **before** monthly calendar normalization to reduce work
+    ds = ds.sel(time=slice("1950-01-01", "2020-12-31"))
+
+    # Normalize monthly calendar to proleptic_gregorian
     ds = to_proleptic_monthly(ds)
 
-    # Normalize coords and detect layer variables
-    if "longitude" in ds.coords:
-        ds = ds.rename({"longitude": "lon"})
-    if "latitude" in ds.coords:
-        ds = ds.rename({"latitude": "lat"})
-    ds = _to_lon_m180_180(ds)
+    # Detect layer variables and compute 0–1 m mass
     v1, v2, v3 = _detect_era5l_vars(ds)
-
-    # Thickness-weighted 0–1 m integration
-    thick = np.array([0.07, 0.21, 0.72])  # m
-    sm = (ds[v1]*thick[0] + ds[v2]*thick[1] + ds[v3]*thick[2]) * 1000.0
+    thick = _ERA5L_THICK_M  # [0.07, 0.21, 0.72] m
+    l1 = ds[v1].astype("float32")
+    l2 = ds[v2].astype("float32")
+    l3 = ds[v3].astype("float32")
+    sm = (l1 * thick[0] + l2 * thick[1] + l3 * thick[2]) * np.float32(1000.0)  # kg m-2
     sm.name = "soilmoist_1m"
 
     # Regrid from 0.1° to 0.5° via block mean
     sm = _maybe_block_coarsen_to_half_degree(sm)
+
+    # Harmonize chunking for coarsen and writing
+    if "time" in sm.dims and "lat" in sm.dims and "lon" in sm.dims:
+        sm = sm.chunk({"time": 12, "lat": 300, "lon": 600})
 
     sm.attrs.update({
         "units": "kg m-2",
@@ -168,7 +212,8 @@ def era5land_to_1m_monthly_halfdeg_v1(registry) -> xr.DataArray:
         "method": "sum(theta_i * thickness_i * 1000) for layers 1–3, block-mean to 0.5°",
         "calendar": "proleptic_gregorian",
         "target_depth_m": 1.0,
-        "source_files": path_glob,
+        "source_files": str(open_target),
+        "note": "Input is a single CDS NetCDF or a set of files; time normalized to proleptic monthly and clipped to 1950–2020.",
     })
     return sm
 
