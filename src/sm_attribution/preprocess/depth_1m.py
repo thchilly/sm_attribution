@@ -217,9 +217,77 @@ def watergap22e_to_1m(ds: xr.Dataset, scenario: str, reg: Registry | None = None
     )
     return _add_common_attrs(da, "watergap2-2e", scenario, note)
 
+
+# Ancillary NetCDF for WEB-DHM-SG is created by scripts/make_webdhmsg_landcover_depths.py
+# and contains variables 'webdhmsg_total_depth' and 'webdhmsg_landcover' (0.5° grid, lat: -89.75..89.75, lon: -179.75..179.75).
+
 def web_dhm_sg_to_1m(ds: xr.Dataset, scenario: str, reg: Registry | None = None) -> xr.DataArray:
-    da = ds["soilmoist"]
-    return _add_common_attrs(da, "web-dhm-sg", scenario, "single-layer total treated as 0–1 m (v0)")
+    """
+    v1: Scale WEB-DHM-SG total soil moisture to a 0–1 m equivalent using ancillary
+    total depth D (m) derived from the provided land-cover map (SiB2 classes).
+    Scaling factor: f = min(1, D) / D → equals 1/D if D>1 else 1.
+    Requires data_registry.yml entry model_ancils -> web-dhm-sg -> landcover_depths
+    pointing to the NetCDF produced by make_webdhmsg_landcover_depths.py
+    (variables: 'webdhmsg_total_depth', 'webdhmsg_landcover').
+    If needed, generate the ancillary with `scripts/make_webdhmsg_landcover_depths.py --ref-nc <path_to_webdhm_file.nc>` so that its lat/lon centers and orientation match the model grid exactly.
+    """
+    if reg is None:
+        raise ValueError("Registry is required for WEB-DHM-SG v1 homogenization (to get ancillaries).")
+
+    if "soilmoist" not in ds:
+        raise KeyError("WEB-DHM-SG: expected variable 'soilmoist' in dataset")
+    sm = ds["soilmoist"]  # (time, lat, lon)
+
+    # Load ancillary total depth map (lat, lon)
+    ancil_path = reg.get_model_ancil("web-dhm-sg", "landcover_depths")
+    ds_anc = xr.open_dataset(ancil_path, decode_times=False)
+
+    # Identify the total-depth variable robustly
+    depth_var_candidates = [
+        v for v in ds_anc.data_vars
+        if v.lower() in ("webdhmsg_total_depth", "total_depth", "depth_total")
+    ]
+    if depth_var_candidates:
+        D = ds_anc[depth_var_candidates[0]]
+    else:
+        # Fallback: first 2D float var with dims (lat, lon) whose units look like meters
+        cand2d = [
+            v for v in ds_anc.data_vars
+            if ds_anc[v].ndim == 2 and set(ds_anc[v].dims) == {"lat", "lon"}
+        ]
+        if not cand2d:
+            raise KeyError("WEB-DHM-SG ancillary does not contain a (lat, lon) depth variable.")
+        D = ds_anc[cand2d[0]]
+
+    # Normalize coordinates to lat/lon if necessary
+    ren = {}
+    if "latitude" in D.coords and "lat" not in D.coords:
+        ren["latitude"] = "lat"
+    if "longitude" in D.coords and "lon" not in D.coords:
+        ren["longitude"] = "lon"
+    if ren:
+        D = D.rename(ren)
+
+    # Ensure grids match exactly (no regridding in this routine)
+    if ("lat" in sm.coords) and ("lon" in sm.coords):
+        if not (np.allclose(sm["lat"].values, D["lat"].values) and np.allclose(sm["lon"].values, D["lon"].values)):
+            raise ValueError("WEB-DHM-SG depth ancillary grid does not match model grid (no regridding performed).")
+
+    # Clean and cast depth
+    D = xr.where(D > 0, D, np.nan).astype("float32")
+
+    # Scale factor f = min(1, D) / D
+    f = xr.where(D > 1.0, 1.0 / D, 1.0)
+
+    # Broadcast and scale
+    da = (sm * f.broadcast_like(sm)).astype(sm.dtype)
+
+    note = (
+        "v1: scaled by WEB-DHM-SG ancillary total depth using f=min(1,D)/D; "
+        "no upscaling for D≤1 m; depth from SiB2 land-cover mapping"
+    )
+    return _add_common_attrs(da, "web-dhm-sg", scenario, note)
+
 
 def lpjml5_7_10_fire_to_1m(ds: xr.Dataset, scenario: str, reg: Registry | None = None) -> xr.DataArray:
     """

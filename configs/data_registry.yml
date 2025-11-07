@@ -74,9 +74,8 @@ model_ancils:
     soil_depth: "/Users/thchilly/projects/sm_attribution/data/ancils/h08/709-H08_SoilDepth.nc"
     soil_moist_max: "/Users/thchilly/projects/sm_attribution/data/ancils/h08/709-H08_SoilMoisMax.nc"
 
-  web_dhm_sg:
-    landuse_ascii: "/Users/thchilly/projects/sm_attribution/data/ancils/web-dhm-sg/land use.asc"
-    legend_txt: "/Users/thchilly/projects/sm_attribution/data/ancils/web-dhm-sg/gbsbm2geo20.leg"
+  web-dhm-sg:
+    landcover_depths: "/Users/thchilly/projects/sm_attribution/data/ancils/web-dhm-sg/webdhmsg_landcover_depths_0p5deg.nc"
 
 
 # --------------------------------------------------------------------
