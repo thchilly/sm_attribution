@@ -31,6 +31,7 @@ def main():
             "gracedadm_rootzone_2003_2020",
             "merra2_1980_2020",
             "gdo_ensmia_2001_2020",
+            "gdo_smia_1995_2020",
         ],
     )
     ap.add_argument("--registry", default="configs/data_registry.yml")
@@ -79,6 +80,11 @@ def main():
         da = gdo_ensmia_to_monthly_halfdeg_v0(reg)
         out_path = reg.get_obs_processed("gdo_ensmia_2001_2020")
         ds_out = da.to_dataset(name="soilmoist_anom_std")
+    elif args.dataset == "gdo_smia_1995_2020":
+        from sm_attribution.preprocess.observations import gdo_smia_to_monthly_halfdeg_v0
+        da = gdo_smia_to_monthly_halfdeg_v0(reg)
+        out_path = reg.get_obs_processed("gdo_smia_1995_2020")
+        ds_out = da.to_dataset(name="soilmoist_anom_std")
     else:
         raise ValueError(f"Unknown dataset: {args.dataset}")
 
@@ -87,6 +93,8 @@ def main():
         if args.dataset == "gracedadm_rootzone_2003_2020":
             var_name = "rootzone_percentile"
         elif args.dataset == "gdo_ensmia_2001_2020":
+            var_name = "soilmoist_anom_std"
+        elif args.dataset == "gdo_smia_1995_2020":
             var_name = "soilmoist_anom_std"
         else:
             var_name = "soilmoist_1m"

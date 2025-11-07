@@ -21,3 +21,6 @@ dependencies:
   # - esmf
   # - esmpy
   # - xesmf
+  # geospatial TIFF handling
+  - rioxarray
+  - rasterio

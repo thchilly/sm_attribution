@@ -104,6 +104,9 @@ observations:
     path: "/Users/thchilly/projects/sm_attribution/data/observed/GDO-ENSMIA/smant_m_wld_*.nc"
     notes: "GDO Ensemble Soil Moisture Anomaly (ten-daily standardized anomaly, 0.1°). Preprocess: select 3rd dekad per month (full-month window), then 0.1°→0.5° by 5×5 block mean. Units: dimensionless; baseline 2001–2016."
 
+  gdo_smia:
+    path: "/Users/thchilly/projects/sm_attribution/data/observed/GDO-SMIA/**/smang_m_gdo_*_t_300_z01.tif"
+    notes: "GDO SMIA (LISFLOOD-only SMA, 1 arcmin) GeoTIFFs nested by year; pattern uses ** for recursive glob. Ten-daily standardized anomaly; use 3rd dekad per month; coarsen 0.1°→0.5° by 5×5 mean."
 # --------------------------------------------------------------------
 # PROCESSED OUTPUTS — after homogenization to 0–1 m (models + observations)
 processed:
@@ -155,3 +158,4 @@ processed:
     gracedadm_2003_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GRACEDADM/GRACEDADM_CLSM025GL_rootzone_percentile_monthly_0p5deg_2003_2020_v0.nc"
     merra2_1980_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/MERRA2-LAND/MERRA2L_soilmoist_1m_monthly_0p5deg_1980_2020_v0.nc"
     gdo_ensmia_2001_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GDO-ENSMIA/GDO_ENSMIA_soilmoist_anom_std_monthly_0p5deg_2001_2020_v0.nc"
+    gdo_smia_1995_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GDO-SMIA/gdo_smia_soilmoist_anom_std_monthly_0p5deg_1995_2020_v0.nc"

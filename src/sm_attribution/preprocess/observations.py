@@ -65,6 +65,7 @@ def _maybe_block_coarsen_to_half_degree(
     Coarsen a regular lat/lon grid to 0.5° by exact block means when possible.
     - 0.1° → factor 5  (backwards compatible path)
     - 0.25° → factor 2 (GLDAS)
+    - 0.05° → factor 10 (e.g., some GDO SMIA tiles)
     For any other spacing, raise with a helpful message unless allow_xesmf=True.
 
     Assumes the variable is *intensive* (kg m-2, m3 m-3), so block *mean* is correct.
@@ -90,6 +91,10 @@ def _maybe_block_coarsen_to_half_degree(
             return 5
         if np.isclose(step, 0.25, atol=atol_deg):  # GLDAS
             return 2
+        if np.isclose(step, 0.05, atol=atol_deg):  # ~3 arcmin (e.g., GDO SMIA)
+            return 10
+        if np.isclose(step, 1.0/60.0, atol=atol_deg):  # ~0.0167° (1 arcmin)
+            return 30
         return None
 
     f_lat = _detect_factor(dlat)
@@ -654,9 +659,139 @@ def merra2_land_to_1m_monthly_halfdeg_v1(registry) -> xr.DataArray:
     })
     return sm_05
 
+def _require_rioxarray():
+    try:
+        import rioxarray as _rxr  # noqa: F401
+    except Exception as exc:
+        raise ImportError(
+            "Reading GDO-SMIA GeoTIFFs requires 'rioxarray' and 'rasterio' in your environment "
+            "(conda-forge: rioxarray, rasterio)."
+        ) from exc
+
 # -----------------------------------------------------------------------------
 # GDO-ENSMIA (Ensemble Soil Moisture Anomaly, JRC) — v0
 # -----------------------------------------------------------------------------
+
+def _open_gdo_smia_geotiffs(registry) -> xr.DataArray:
+    """
+    Open all GDO-SMIA GeoTIFFs (ten-daily anomaly) and stack into a single DataArray
+    with dims (time, lat, lon). Filenames are expected to contain YYYYMMDD.
+    """
+    _require_rioxarray()
+    import re
+    import rioxarray as rxr
+
+    # Collect all .tif recursively from the registry glob
+    path_glob = registry.get_obs_raw("gdo_smia")
+    file_list = sorted(glob.glob(path_glob, recursive=True))
+    if not file_list:
+        raise FileNotFoundError(f"No GDO-SMIA GeoTIFFs matched pattern: {path_glob}")
+
+    da_list = []
+    time_list = []
+    # Regex to capture the first YYYYMMDD in filename
+    date_re = re.compile(r"(?P<yyyymmdd>(?P<yyyy>\d{4})(?P<mm>\d{2})(?P<dd>\d{2}))")
+
+    for fp in file_list:
+        m = date_re.search(os.path.basename(fp))
+        if not m:
+            # Skip files without a parsable date
+            continue
+        y, mth, d = int(m.group("yyyy")), int(m.group("mm")), int(m.group("dd"))
+        tstamp = np.datetime64(f"{y:04d}-{mth:02d}-{d:02d}")
+
+        da = rxr.open_rasterio(fp, masked=True, chunks={"x": 1024, "y": 1024})
+        # Drop band dimension (single-band rasters)
+        if "band" in da.dims and da.sizes["band"] == 1:
+            da = da.squeeze("band", drop=True)
+
+        # Rename axes to lon/lat and ensure proper orientation
+        rename = {}
+        if "x" in da.dims: rename["x"] = "lon"
+        if "y" in da.dims: rename["y"] = "lat"
+        da = da.rename(rename)
+
+        # Ensure lon in [-180,180), sort lon/lat ascending for coarsen
+        if "lon" in da.coords:
+            lon = da["lon"]
+            if float(lon.max().item()) > 180.0 + 1e-6:
+                da = da.assign_coords(lon=((lon + 180.0) % 360.0) - 180.0).sortby("lon")
+        if "lat" in da.coords and da.lat.size > 1 and da.lat[1] < da.lat[0]:
+            da = da.sortby("lat")
+
+        # Standardize name and attach time coordinate
+        da = da.astype("float32")
+        
+        # --- Defensive cleanup of any existing 'time' metadata from GeoTIFFs ---
+        # If 'time' is a dimension (index coordinate), handle it first
+        if "time" in da.dims:
+            if da.sizes.get("time", 0) == 1:
+                # Drop a size-1 time dimension cleanly
+                da = da.isel(time=0, drop=True)
+            else:
+                # Unexpected multi-time GeoTIFF: rename and drop the coord
+                da = da.rename({"time": "_time_tmp"}).reset_coords("_time_tmp", drop=True)
+        
+        # If 'time' is only a coordinate (not a dimension), drop it
+        if ("time" in da.coords) and ("time" not in da.dims):
+            da = da.reset_coords("time", drop=True)
+        
+        # --- Now add a proper monthly/dekad timestamp as a dimension ---
+        da = da.expand_dims(time=[tstamp]).assign_coords(time=("time", [tstamp]))
+        da.name = "smia"
+
+        # Replace nodata with NaN if not already masked
+        nodata = da.rio.nodata if hasattr(da, "rio") else None
+        if nodata is not None and np.isfinite(nodata):
+            da = da.where(da != np.float32(nodata))
+
+        da_list.append(da)
+        time_list.append(tstamp)
+
+    if not da_list:
+        raise RuntimeError("No valid GDO-SMIA GeoTIFFs with parsable YYYYMMDD dates were found.")
+
+    da = xr.concat(da_list, dim="time").sortby("time")
+    # Keep only the requested era (1995–2020) for v0
+    da = da.sel(time=slice("1995-01-01", "2020-12-31"))
+    da.name = "soilmoist_anom_std"
+    da.attrs.update({
+        "units": "dimensionless",
+        "long_name": "GDO Soil Moisture Index Anomaly (SMA)",
+        "note": "Values are standardized anomalies (baseline 1995–2024) from LISFLOOD (top two layers).",
+        "source": "GDO/EDO (EFAS5 LISFLOOD), GeoTIFF inputs",
+    })
+    return da
+
+def gdo_smia_to_monthly_halfdeg_v0(registry) -> xr.DataArray:
+    """
+    Build GDO-SMIA (LISFLOOD-only standardized anomaly) to monthly 0.5° (v0).
+
+    Steps:
+      1) Read all GeoTIFFs via rioxarray, stack as (time, lat, lon).
+      2) For each month, select the last available dekad (nearest to month-end) to represent the month.
+      3) Spatially coarsen ~1 arcmin (~0.0167°) to 0.5° using exact 30×30 block mean.
+
+    Output variable: 'soilmoist_anom_std' (dimensionless).
+    """
+    da = _open_gdo_smia_geotiffs(registry)
+
+    # Pick the last timestep per calendar month (handles months with 2 or 3 dekads gracefully)
+    da_monthly = da.resample(time="MS").map(lambda x: x.isel(time=-1))
+
+    # Coarsen 1' → 0.5° by block mean (intensive standardized index)
+    da_05 = _maybe_block_coarsen_to_half_degree(da_monthly)
+
+    da_05.name = "soilmoist_anom_std"
+    da_05.attrs.update({
+        "units": "dimensionless",
+        "long_name": "GDO SMIA (standardized anomaly), monthly, 0.5°",
+        "method": "GeoTIFF stack → monthly last-dekad selection; 1 arcmin → 0.5° block mean",
+        "calendar": "proleptic_gregorian",
+        "target_grid": "0.5° regular lat/lon",
+        "spatial_coverage_note": "Native coverage may vary by month; coarsening averages only available cells within each 0.5° block.",
+    })
+    return da_05
 
 def _open_gdo_ensmia_stack(registry) -> xr.Dataset:
     """Open all GDO-ENSMIA anomaly files and normalize coordinates."""
@@ -721,3 +856,4 @@ def gdo_ensmia_to_monthly_halfdeg_v0(registry) -> xr.DataArray:
     })
 
     return da_05
+
