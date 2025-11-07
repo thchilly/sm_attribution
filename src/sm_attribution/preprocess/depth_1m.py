@@ -20,10 +20,76 @@ def _add_common_attrs(da: xr.DataArray, model: str, scenario: str, note: str | N
 
 # ---- v0 recipes mirroring MATLAB layer selections ----
 
+
+# --- H08 v1: scale using ancillary soil depth map ---
+def _h08_depth_map_from_ancil(reg: Registry, like: xr.Dataset) -> xr.DataArray:
+    """
+    Load H08 soil depth ancillary and return a DataArray D(lat, lon) in meters.
+    The ancillary path is taken from data registry under model_ancils -> h08 -> soil_depth.
+    We do not perform any regridding; the coordinates must match the model grid exactly.
+    """
+    ancil_path = reg.get_model_ancil("h08", "soil_depth")
+    # Some ancils may have no/odd time definitions; avoid CF decoding pitfalls.
+    ds_depth = xr.open_dataset(ancil_path, decode_times=False)
+
+    # Normalize coordinate names to 'lat'/'lon' if needed
+    rename = {}
+    if "latitude" in ds_depth.coords and "lat" not in ds_depth.coords:
+        rename["latitude"] = "lat"
+    if "longitude" in ds_depth.coords and "lon" not in ds_depth.coords:
+        rename["longitude"] = "lon"
+    if rename:
+        ds_depth = ds_depth.rename(rename)
+
+    # Heuristic: pick the first 2D variable over (lat, lon)
+    cand_vars = [
+        v for v in ds_depth.data_vars
+        if set(ds_depth[v].dims) == {"lat", "lon"} and ds_depth[v].ndim == 2
+    ]
+    if not cand_vars:
+        # If the variable has a singleton time dimension, drop it.
+        cand_vars_time = [
+            v for v in ds_depth.data_vars
+            if "time" in ds_depth[v].dims and ds_depth[v].sizes.get("time", 1) == 1
+            and set([d for d in ds_depth[v].dims if d != "time"]) == {"lat", "lon"}
+        ]
+        if not cand_vars_time:
+            raise KeyError("H08 depth ancillary: could not find a (lat, lon) 2D depth variable.")
+        varname = cand_vars_time[0]
+        D = ds_depth[varname].isel(time=0, drop=True)
+    else:
+        varname = cand_vars[0]
+        D = ds_depth[varname]
+
+    # Ensure grids match exactly
+    if ("lat" in like.coords) and ("lon" in like.coords):
+        if not (np.allclose(like["lat"].values, D["lat"].values) and np.allclose(like["lon"].values, D["lon"].values)):
+            raise ValueError("H08 soil depth ancillary grid does not match model grid (no regridding performed).")
+
+    # Basic sanity: non-positive depths → treat as NaN to avoid division issues
+    D = xr.where(D > 0, D, np.nan).astype("float32")
+    D.name = "h08_soil_depth"
+    D.attrs.update({
+        "units": "m",
+        "long_name": "H08 soil depth (ancillary)",
+        "source": str(ancil_path),
+        "mapping_note": "Applied directly; no regridding; invalid (≤0) masked."
+    })
+    return D
+
 def h08_to_1m(ds: xr.Dataset, scenario: str, reg: Registry | None = None) -> xr.DataArray:
-    # pass-through single-layer total
-    da = ds["soilmoist"]
-    return _add_common_attrs(da, "h08", scenario, "single-layer total treated as 0–1 m (v0)")
+    # v1: scale using provided soil depth map D (m) with factor f = min(1, D)/D
+    if reg is None:
+        raise ValueError("Registry is required for H08 v1 homogenization (to get ancillaries).")
+    sm = ds["soilmoist"]
+    # Build depth map aligned to (lat, lon)
+    D = _h08_depth_map_from_ancil(reg, like=sm.to_dataset())
+    # Scale factor: no upscaling for shallow columns (D ≤ 1 m), downscale if D > 1 m
+    f = xr.where(D > 1.0, 1.0 / D, 1.0)
+    f_b = f.broadcast_like(sm)
+    da = (sm * f_b).astype(sm.dtype)
+    note = "v1: scaled by H08 soil depth ancillary using f=min(1,D)/D; no upscaling for D≤1 m"
+    return _add_common_attrs(da, "h08", scenario, note)
 
 def hydropy_to_1m(ds: xr.Dataset, scenario: str, reg: Registry | None = None) -> xr.DataArray:
     # pass-through root-zone mass
