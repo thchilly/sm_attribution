@@ -23,7 +23,7 @@ def harmonize_one(model: str, scenario: str, reg: Registry) -> str:
         fn = MODEL_TO_FUNC[model]
     except KeyError as e:
         raise KeyError(f"No v0 depth recipe registered for model={model}") from e
-    da_1m = fn(ds, scenario)
+    da_1m = fn(ds, scenario, reg)
 
     # write as netCDF (NetCDF4 classic compatible)
     enc = {da_1m.name: {"zlib": True, "complevel": 4, "dtype": "float32", "_FillValue": -9999.0}}

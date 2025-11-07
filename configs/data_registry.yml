@@ -65,6 +65,20 @@ models:
     counterclim_1901soc:    "/Users/thchilly/projects/sm_attribution/data/models/lpjml5-7-10-fire_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019.nc"
     variable: "soilmoist"
 
+# model ancillary files (e.g., landcover, soil properties) for 0-1 (v1) depth homogenization
+model_ancils:
+  watergap2-2e:
+    landcover: "/Users/thchilly/projects/sm_attribution/data/ancils/watergap2-2e/watergap_22d_landcover.nc4"
+
+  h08:
+    soil_depth: "/Users/thchilly/projects/sm_attribution/data/ancils/h08/709-H08_SoilDepth.nc"
+    soil_moist_max: "/Users/thchilly/projects/sm_attribution/data/ancils/h08/709-H08_SoilMoisMax.nc"
+
+  web_dhm_sg:
+    landuse_ascii: "/Users/thchilly/projects/sm_attribution/data/ancils/web-dhm-sg/land use.asc"
+    legend_txt: "/Users/thchilly/projects/sm_attribution/data/ancils/web-dhm-sg/gbsbm2geo20.leg"
+
+
 # --------------------------------------------------------------------
 # RAW OBSERVATIONS (use only NetCDF/NC4; ignore .mat/.m files)
 observations:

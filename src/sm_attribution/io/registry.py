@@ -50,6 +50,23 @@ class Registry:
             "counterclim_1901soc",
         )
     
+    # Model ancillary resources for depth homogenization
+    def get_model_ancil(self, *keys: str) -> str:
+        """
+        Return an ancillary path for a model, e.g.,
+        get_ancil("watergap2-2e", "landcover").
+        """
+        node = self.cfg.get("model_ancils", {})
+        for k in keys:
+            if not isinstance(node, dict) or k not in node:
+                raise KeyError(f"Missing model ancils {'/'.join(keys)} in data_registry.yml")
+            node = node[k]
+        if not isinstance(node, str):
+            raise KeyError(f"Ancillary path at {'/'.join(keys)} is not a string")
+        path = os.path.expanduser(os.path.expandvars(node))
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Ancillary file not found: {path}")
+        return path
 
     # ------------------------------------------------------------------
     # OBSERVATIONS

@@ -1,6 +1,8 @@
 from __future__ import annotations
 from ..io.settings import get_settings
 import xarray as xr
+import numpy as np
+from ..io.registry import Registry  # type: ignore
 
 SET = get_settings()
 TARGET_DEPTH_M = SET.depth_target_m
@@ -18,17 +20,17 @@ def _add_common_attrs(da: xr.DataArray, model: str, scenario: str, note: str | N
 
 # ---- v0 recipes mirroring MATLAB layer selections ----
 
-def h08_to_1m(ds: xr.Dataset, scenario: str) -> xr.DataArray:
+def h08_to_1m(ds: xr.Dataset, scenario: str, reg: Registry | None = None) -> xr.DataArray:
     # pass-through single-layer total
     da = ds["soilmoist"]
     return _add_common_attrs(da, "h08", scenario, "single-layer total treated as 0–1 m (v0)")
 
-def hydropy_to_1m(ds: xr.Dataset, scenario: str) -> xr.DataArray:
+def hydropy_to_1m(ds: xr.Dataset, scenario: str, reg: Registry | None = None) -> xr.DataArray:
     # pass-through root-zone mass
     da = ds["rootmoist"]
     return _add_common_attrs(da, "hydropy", scenario, "root-zone mass; native depth may differ from 1 m (v0)")
 
-def jules_w2_to_1m(ds: xr.Dataset, scenario: str) -> xr.DataArray:
+def jules_w2_to_1m(ds: xr.Dataset, scenario: str, reg: Registry | None = None) -> xr.DataArray:
     # sum layers 1–3 of soilmoist
     sm = ds["soilmoist"]
     # assume dim order (..., depth, time) or (depth, time, lat, lon) is unknown – index by name if present
@@ -46,7 +48,7 @@ def jules_w2_to_1m(ds: xr.Dataset, scenario: str) -> xr.DataArray:
         da.loc[dict(time=da.time.isel(time=-1))] = da.isel(time=-2)
     return _add_common_attrs(da, "jules-w2", scenario, "sum of layers 1–3 (v0)")
 
-def miroc_integ_land_to_1m(ds: xr.Dataset, scenario: str) -> xr.DataArray:
+def miroc_integ_land_to_1m(ds: xr.Dataset, scenario: str, reg: Registry | None = None) -> xr.DataArray:
     # sum layers 1–3
     sm = ds["soilmoist"]
     depth_dim = next((d for d in sm.dims if d.lower() in ("depth", "layer", "lev", "levsoi")), None)
@@ -55,15 +57,105 @@ def miroc_integ_land_to_1m(ds: xr.Dataset, scenario: str) -> xr.DataArray:
     da = sm.isel({depth_dim: slice(0, 3)}).sum(depth_dim, skipna=True)
     return _add_common_attrs(da, "miroc-integ-land", scenario, "sum of layers 1–3 (v0)")
 
-def watergap22e_to_1m(ds: xr.Dataset, scenario: str) -> xr.DataArray:
-    da = ds["soilmoist"]
-    return _add_common_attrs(da, "watergap2-2e", scenario, "root-zone-like total treated as 0–1 m (v0)")
 
-def web_dhm_sg_to_1m(ds: xr.Dataset, scenario: str) -> xr.DataArray:
+def _watergap_depth_map_from_landcover(reg: Registry, like: xr.Dataset) -> xr.DataArray:
+    """Build per-pixel rooting depth D (m) for WaterGAP from the ancillary landcover file.
+    Returns a DataArray (lat, lon) with depths in meters. Unknown/missing classes → NaN.
+    Assumes the ancillary grid matches ISIMIP 0.5° (lat: -89.75..89.75, lon: -179.75..179.75).
+    """
+    if reg is None:
+        raise ValueError("Registry is required to load WaterGAP landcover ancillary.")
+    ancil_path = reg.get_model_ancil("watergap2-2e", "landcover")
+    # WaterGAP landcover has time units in 'years since ...'; open without CF time decoding (dummy time).
+    ds_lc = xr.open_dataset(ancil_path, decode_times=False)
+    if "landcover" not in ds_lc:
+        raise KeyError("Ancillary file missing 'landcover' variable: " + ancil_path)
+    lc = ds_lc["landcover"]
+    # Drop the dummy time dim (time=1) if present
+    if "time" in lc.dims and lc.sizes.get("time", 1) == 1:
+        lc = lc.isel(time=0, drop=True)
+    # Ensure coord names match (lat/lon)
+    if "latitude" in lc.coords:
+        lc = lc.rename({"latitude": "lat"})
+    if "longitude" in lc.coords:
+        lc = lc.rename({"longitude": "lon"})
+
+    # Align to target grid if necessary (expect same, otherwise will raise on mismatch)
+    # We avoid any interpolation; require exact coords equality.
+    if ("lat" in like.coords) and ("lon" in like.coords):
+        if not (np.allclose(like.lat.values, lc.lat.values) and np.allclose(like.lon.values, lc.lon.values)):
+            raise ValueError("WaterGAP landcover ancillary grid does not match model grid (no regridding performed).")
+    
+    # Class → rooting depth (m) table as provided by WaterGAP team (Appendix C, mail)
+    # Missing codes 11 and 13 are set to 1.0 m (neutral) by default.
+    # Index 0 is unused.
+    depth_lookup = np.full(17, np.nan, dtype=np.float32)
+    depth_lookup[1] = 2.0   # Evergreen needleleaf forest
+    depth_lookup[2] = 4.0   # Evergreen broadleaf forest
+    depth_lookup[3] = 2.0   # Deciduous needleleaf forest
+    depth_lookup[4] = 2.0   # Deciduous broadleaf forest
+    depth_lookup[5] = 2.0   # Mixed forest
+    depth_lookup[6] = 1.0   # Closed shrubland
+    depth_lookup[7] = 0.5   # Open shrubland
+    depth_lookup[8] = 1.5   # Woody savanna
+    depth_lookup[9] = 1.5   # Savanna
+    depth_lookup[10] = 1.0  # Grassland
+    depth_lookup[11] = 1.0  # (unused in legend) → neutral
+    depth_lookup[12] = 1.0  # Cropland
+    depth_lookup[13] = 1.0  # (unused in legend) → neutral
+    depth_lookup[14] = 1.0  # Cropland/natural mosaic
+    depth_lookup[15] = 1.0  # Snow and Ice (permanent)
+    depth_lookup[16] = 0.1  # Barren or sparsely vegetated
+
+    # Map classes to depths. Landcover is float; round then cast to int for lookup.
+    lc_codes = xr.apply_ufunc(np.rint, lc).astype("int16")
+    D = xr.apply_ufunc(np.take, depth_lookup, lc_codes, dask="allowed")
+    D = xr.where(np.isfinite(lc), D, np.nan)
+    D.name = "watergap_root_depth"
+    D.attrs.update({
+        "units": "m",
+        "long_name": "Effective rooting depth derived from WaterGAP landcover",
+        "source": str(ancil_path),
+        "mapping_note": "Codes 1..16 mapped per Appendix C; codes 11 and 13 set to 1.0 m (neutral).",
+    })
+    return D
+
+
+def watergap22e_to_1m(ds: xr.Dataset, scenario: str, reg: Registry | None = None) -> xr.DataArray:
+    """
+    v1: Scale WaterGAP total/root-zone soil moisture by per-pixel rooting depth D (m)
+    using the WaterGAP landcover ancillary and the scaling factor f = min(1, D) / D.
+    - For D > 1 m → f = 1/D (downscale deeper columns to 1 m equivalent)
+    - For D ≤ 1 m → f = 1 (no upscaling of shallow columns)
+    """
+    if reg is None:
+        raise ValueError("Registry is required for WaterGAP v1 homogenization (to get ancillaries).")
+    sm = ds["soilmoist"]  # (time, depth=1, lat, lon) or (time, lat, lon)
+    # Drop singleton depth if present
+    if "depth" in sm.dims and sm.sizes.get("depth", 1) == 1:
+        sm = sm.isel(depth=0, drop=True)
+
+    # Build depth map aligned to (lat, lon)
+    D = _watergap_depth_map_from_landcover(reg, like=sm.to_dataset())
+
+    # Scale factor f = min(1, D) / D → equals 1/D if D>1 else 1
+    f = xr.where(D > 1.0, 1.0 / D, 1.0)
+
+    # Broadcast (lat, lon) → (time, lat, lon)
+    f_b = f.broadcast_like(sm)
+    da = (sm * f_b).astype(sm.dtype)
+
+    note = (
+        "v1: scaled by rooting depth from WaterGAP landcover using f=min(1,D)/D; "
+        "no upscaling for D≤1 m; codes 11 & 13 treated as 1.0 m"
+    )
+    return _add_common_attrs(da, "watergap2-2e", scenario, note)
+
+def web_dhm_sg_to_1m(ds: xr.Dataset, scenario: str, reg: Registry | None = None) -> xr.DataArray:
     da = ds["soilmoist"]
     return _add_common_attrs(da, "web-dhm-sg", scenario, "single-layer total treated as 0–1 m (v0)")
 
-def lpjml5_7_10_fire_to_1m(ds: xr.Dataset, scenario: str) -> xr.DataArray:
+def lpjml5_7_10_fire_to_1m(ds: xr.Dataset, scenario: str, reg: Registry | None = None) -> xr.DataArray:
     """
     Integrate LPJmL5-7-10-fire layered soil moisture to 0–1 m using depth bounds.
     Expects variables:
