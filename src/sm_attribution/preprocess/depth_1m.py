@@ -82,6 +82,11 @@ def h08_to_1m(ds: xr.Dataset, scenario: str, reg: Registry | None = None) -> xr.
     if reg is None:
         raise ValueError("Registry is required for H08 v1 homogenization (to get ancillaries).")
     sm = ds["soilmoist"]
+
+    # drop dummy depth dim if present
+    if "depth" in sm.dims and sm.sizes.get("depth", 1) == 1:
+        sm = sm.isel(depth=0, drop=True)
+                     
     # Build depth map aligned to (lat, lon)
     D = _h08_depth_map_from_ancil(reg, like=sm.to_dataset())
     # Scale factor: no upscaling for shallow columns (D ≤ 1 m), downscale if D > 1 m
@@ -94,6 +99,7 @@ def h08_to_1m(ds: xr.Dataset, scenario: str, reg: Registry | None = None) -> xr.
 def hydropy_to_1m(ds: xr.Dataset, scenario: str, reg: Registry | None = None) -> xr.DataArray:
     # pass-through root-zone mass
     da = ds["rootmoist"]
+    da = da.transpose("time", "lat", "lon", missing_dims="ignore")
     return _add_common_attrs(da, "hydropy", scenario, "root-zone mass; native depth may differ from 1 m (v0)")
 
 def jules_w2_to_1m(ds: xr.Dataset, scenario: str, reg: Registry | None = None) -> xr.DataArray:
@@ -112,6 +118,9 @@ def jules_w2_to_1m(ds: xr.Dataset, scenario: str, reg: Registry | None = None) -
     # If last month is entirely missing, copy previous month (as in MATLAB)
     if da.isnull().isel(time=-1).all():
         da.loc[dict(time=da.time.isel(time=-1))] = da.isel(time=-2)
+
+    da = da.transpose("time", "lat", "lon", missing_dims="ignore")
+
     return _add_common_attrs(da, "jules-w2", scenario, "sum of layers 1–3 (v0)")
 
 def miroc_integ_land_to_1m(ds: xr.Dataset, scenario: str, reg: Registry | None = None) -> xr.DataArray:
@@ -121,6 +130,7 @@ def miroc_integ_land_to_1m(ds: xr.Dataset, scenario: str, reg: Registry | None =
     if depth_dim is None:
         raise KeyError("MIROC-INTEG-LAND: cannot find depth dimension")
     da = sm.isel({depth_dim: slice(0, 3)}).sum(depth_dim, skipna=True)
+    da = da.transpose("time", "lat", "lon", missing_dims="ignore")
     return _add_common_attrs(da, "miroc-integ-land", scenario, "sum of layers 1–3 (v0)")
 
 
@@ -211,6 +221,9 @@ def watergap22e_to_1m(ds: xr.Dataset, scenario: str, reg: Registry | None = None
     f_b = f.broadcast_like(sm)
     da = (sm * f_b).astype(sm.dtype)
 
+    # ensure standard order and no singleton dims
+    da = da.transpose("time", "lat", "lon", missing_dims="ignore")
+
     note = (
         "v1: scaled by rooting depth from WaterGAP landcover using f=min(1,D)/D; "
         "no upscaling for D≤1 m; codes 11 & 13 treated as 1.0 m"
@@ -281,6 +294,8 @@ def web_dhm_sg_to_1m(ds: xr.Dataset, scenario: str, reg: Registry | None = None)
 
     # Broadcast and scale
     da = (sm * f.broadcast_like(sm)).astype(sm.dtype)
+
+    da = da.transpose("time", "lat", "lon", missing_dims="ignore")
 
     note = (
         "v1: scaled by WEB-DHM-SG ancillary total depth using f=min(1,D)/D; "
