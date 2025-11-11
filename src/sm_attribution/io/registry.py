@@ -2,6 +2,7 @@ from __future__ import annotations
 import os
 import yaml
 from typing import Dict
+from pathlib import Path 
 
 class Registry:
     """
@@ -88,3 +89,19 @@ class Registry:
         # ensure parent directory exists
         os.makedirs(os.path.dirname(path), exist_ok=True)
         return path
+    
+    @property
+    def cfg_dict(self) -> dict:
+        """Return the full loaded YAML dict (for templates, etc.)."""
+        return self.cfg
+
+def default_registry() -> "Registry":
+    """
+    Construct a Registry by locating the project root and using configs/data_registry.yml.
+    Works regardless of working directory (e.g., from notebooks).
+    """
+    # registry.py path: .../src/sm_attribution/io/registry.py
+    # project root is parents[3] -> .../ (since parents: io -> sm_attribution -> src -> PROJECT)
+    root = Path(__file__).resolve().parents[3]
+    yaml_path = root / "configs" / "data_registry.yml"
+    return Registry(str(yaml_path))

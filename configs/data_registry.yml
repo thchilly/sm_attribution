@@ -6,6 +6,9 @@ paths:
   raw_obs: "/Users/thchilly/projects/sm_attribution/data/observed"
   processed_models_1m: "/Users/thchilly/projects/sm_attribution/data/models_1m"
   processed_obs_1m: "/Users/thchilly/projects/sm_attribution/data/observed_1m"
+  # SSI path
+  ssi_models: "/Users/thchilly/projects/sm_attribution/data/ssi_models"
+  ssi_observed: "/Users/thchilly/projects/sm_attribution/data/ssi_observed"
 
 naming_notes:
   obsclim: "observational (factual) climate"
@@ -172,3 +175,9 @@ processed:
     merra2_1980_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/MERRA2-LAND/MERRA2L_soilmoist_1m_monthly_0p5deg_1980_2020_v0.nc"
     gdo_ensmia_2001_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GDO-ENSMIA/GDO_ENSMIA_soilmoist_anom_std_monthly_0p5deg_2001_2020_v0.nc"
     gdo_smia_1995_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GDO-SMIA/gdo_smia_soilmoist_anom_std_monthly_0p5deg_1995_2020_v0.nc"
+
+# --------------------------------------------------------------------
+# configs/data_registry.yml
+ssi_templates:
+  model: "{paths.ssi_models}/{mode}/ref_{refstart_yr}_{refend_yr}/{model}_{scenario}_ssi-{mode}_s{scale}_ref{refstart}-{refend}.nc"
+  observed: "{paths.ssi_observed}/{obskey}_ssi_s{scale}_ref{refstart}-{refend}.nc"
