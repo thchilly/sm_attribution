@@ -24,3 +24,8 @@ dependencies:
   # geospatial TIFF handling
   - rioxarray
   - rasterio
+  # metrics
+  - xskillscore
+  # nc mask handling
+  - geopandas
+  - shapely

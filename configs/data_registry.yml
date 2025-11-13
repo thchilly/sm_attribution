@@ -181,3 +181,16 @@ processed:
 ssi_templates:
   model: "{paths.ssi_models}/{mode}/ref_{refstart_yr}_{refend_yr}/{model}_{scenario}_ssi-{mode}_s{scale}_ref{refstart}-{refend}.nc"
   observed: "{paths.ssi_observed}/{obskey}_ssi_s{scale}_ref{refstart}-{refend}.nc"
+
+  # configs/data_registry.yml  (add near other top-level blocks)
+ancils:
+  landmask:
+    isimip_water_global: "{paths.root}/ancils/_land_mask/landseamask_water-global.nc"
+    isimip_generic: "{paths.root}/ancils/_land_mask/landseamask.nc"
+    isimip_no_ant: "{paths.root}/ancils/_land_mask/landseamask_no-ant.nc"
+    isimip_no_ant_nogreenland: "{paths.root}/ancils/_land_mask/landseamask_no-ant-nogreenland.nc"
+  shapes:
+    greenland_gl: "{paths.root}/ancils/_land_mask/gl_shp/gl.shp"
+    
+metrics:
+  correlations_map: "{paths.root}/metrics/correlations/{mode}/ref_2004_2019/maps/corr_{target}_{obs}_{model}_{scenario}.nc"
