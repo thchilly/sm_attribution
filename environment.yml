@@ -1,7 +1,7 @@
-name: sm-attr
+name: sm-attr-311
 channels: [conda-forge]
 dependencies:
-  - python>=3.10
+  - python=3.11
   - xarray
   - netcdf4
   - cftime
@@ -18,9 +18,9 @@ dependencies:
   - cartopy
   - regionmask
   # regridding / ESMF stack
-  # - esmf
-  # - esmpy
-  # - xesmf
+  - esmf
+  - esmpy
+  - xesmf
   # geospatial TIFF handling
   - rioxarray
   - rasterio

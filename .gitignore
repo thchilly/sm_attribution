@@ -34,3 +34,8 @@ figures/*.pdf
 figures/*.svg
 *.log
 *.tmp
+
+# Backups of environment files
+old.environment.yml
+*backup*.yml
+env*_backup.yml
