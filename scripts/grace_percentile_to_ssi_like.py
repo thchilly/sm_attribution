@@ -18,12 +18,29 @@ python scripts/grace_percentile_to_ssi_like.py \
 from __future__ import annotations
 
 import argparse
-import numpy as np
 import xarray as xr
 from scipy.stats import norm
 
 from sm_attribution.io.registry import default_registry
+from sm_attribution.io.settings import get_settings
 from sm_attribution.analysis.ensemble import ssi_obs_path  # registry-based output path
+
+
+SETTINGS = get_settings()
+
+
+def _default_scale_from_settings() -> int:
+    """
+    Return the default SSI scale (months) from settings.yml, falling back to 3
+    if the key is missing or malformed.
+    """
+    ssi_cfg = getattr(SETTINGS, "ssi", None)
+    # Handle both attribute-style and dict-style configs defensively
+    if ssi_cfg is None:
+        return 3
+    if isinstance(ssi_cfg, dict):
+        return int(ssi_cfg.get("scale_months", 3))
+    return int(getattr(ssi_cfg, "scale_months", 3))
 
 
 def _load_grace_monthly_percentile(path: str, var: str = "rootzone_percentile") -> xr.DataArray:
@@ -35,13 +52,13 @@ def _load_grace_monthly_percentile(path: str, var: str = "rootzone_percentile") 
         da = ds[var]
     else:
         # Fallback: first variable with (time, lat, lon) dimensions
-        cands = [
+        candidates = [
             k for k in ds.data_vars
             if {"time", "lat", "lon"}.issubset(ds[k].dims)
         ]
-        if not cands:
+        if not candidates:
             raise KeyError(f"No (time, lat, lon) percentile variable found in {path}.")
-        da = ds[cands[0]]
+        da = ds[candidates[0]]
 
     # Normalize dimension names
     ren: dict[str, str] = {}
@@ -97,8 +114,11 @@ def main() -> None:
     parser.add_argument(
         "--scale",
         type=int,
-        default=3,
-        help="Temporal window (months). For SSI comparability, use 3.",
+        default=_default_scale_from_settings(),
+        help=(
+            "Temporal window (months). "
+            "Default is taken from settings.yml (ssi.scale_months)."
+        ),
     )
     parser.add_argument(
         "--ref-start",
@@ -124,7 +144,7 @@ def main() -> None:
     da_p = _load_grace_monthly_percentile(in_path, var=args.var)
     da_z = _percentile_to_z(da_p)
 
-    # Optional rolling window in time (e.g. 3-month mean)
+    # Optional rolling window in time (e.g. N-month mean from settings or CLI)
     if args.scale and args.scale > 1:
         da_z = da_z.rolling(time=args.scale, min_periods=args.scale).mean()
 
