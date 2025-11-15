@@ -1,4 +1,7 @@
-# src/sm_attribution/analysis/ensemble.py
+"""
+Utilities for standardized SSI paths and on-demand SSI generation
+for model and observational datasets.
+"""
 from __future__ import annotations
 import os
 import xarray as xr
@@ -7,7 +10,12 @@ from pathlib import Path
 import yaml
 
 from ..io.registry import Registry, default_registry
+from ..io.settings import get_settings
 from .ssi import save_ssi  # uses ssi_templates in data_registry.yml
+
+# Global settings (e.g., SSI scale) shared across the codebase
+_SETTINGS = get_settings()
+_DEFAULT_SSI_SCALE = int(_SETTINGS.ssi.get("scale_months", 3))
 
 # --- small helpers to resolve SSI output path without computing ---
 def _load_registry_yaml(yaml_path: str) -> dict:
@@ -30,6 +38,10 @@ def expected_ssi_path(
     ref_end: str,
     mode: str,
 ) -> str:
+    """
+    Resolve the expected SSI output path from the registry YAML
+    for either a model or observational dataset, without computing SSI.
+    """
     cfg = _load_registry_yaml(yaml_path)
     paths = cfg.get("paths", {})
     tmpls = cfg.get("ssi_templates", {})
@@ -52,13 +64,53 @@ def expected_ssi_path(
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     return out_path
 
+def ssi_model_path(
+    model: str,
+    scenario: str,
+    *,
+    reg: Registry | None = None,
+    scale: int = _DEFAULT_SSI_SCALE,
+    ref_start: str = "2003-01",
+    ref_end: str = "2019-12",
+    mode: str = "standalone",
+) -> str:
+    """
+    Return the expected SSI file path for a given (model, scenario) according to data_registry.yml
+    without computing it. This is useful for analysis steps (e.g., correlation) that just need
+    to locate already-produced SSI files.
+    """
+    reg = reg or default_registry()
+    key = f"{model}_{scenario}"
+    return expected_ssi_path(
+        yaml_path=reg.yaml_path, is_model=True, key=key,
+        scale=scale, ref_start=ref_start, ref_end=ref_end, mode=mode
+    )
+
+def ssi_obs_path(
+    obs_key: str,
+    *,
+    reg: Registry | None = None,
+    scale: int = _DEFAULT_SSI_SCALE,
+    ref_start: str = "2003-01",
+    ref_end: str = "2019-12",
+) -> str:
+    """
+    Return the expected SSI file path for an observed dataset according to data_registry.yml
+    without computing it.
+    """
+    reg = reg or default_registry()
+    return expected_ssi_path(
+        yaml_path=reg.yaml_path, is_model=False, key=obs_key,
+        scale=scale, ref_start=ref_start, ref_end=ref_end, mode="standalone"
+    )
+
 # --- public API ---
 def ensure_ssi_model(
     model: str,
     scenario: str,
     *,
     reg: Registry | None = None,
-    scale: int = 3,
+    scale: int = _DEFAULT_SSI_SCALE,
     ref_start: str = "2003-01",
     ref_end: str = "2019-12",
     mode: str = "standalone",
@@ -98,7 +150,7 @@ def ensure_ssi_obs(
     obs_key: str,
     *,
     reg: Registry | None = None,
-    scale: int = 3,
+    scale: int = _DEFAULT_SSI_SCALE,
     ref_start: str = "2003-01",
     ref_end: str = "2019-12",
 ) -> str:
@@ -132,7 +184,7 @@ def ensure_all_models(
     scenarios: Iterable[str],
     *,
     reg: Registry | None = None,
-    scale: int = 3,
+    scale: int = _DEFAULT_SSI_SCALE,
     ref_start: str = "2003-01",
     ref_end: str = "2019-12",
     mode: str = "standalone",
@@ -151,7 +203,7 @@ def ensure_all_obs(
     obs_keys: Iterable[str],
     *,
     reg: Registry | None = None,
-    scale: int = 3,
+    scale: int = _DEFAULT_SSI_SCALE,
     ref_start: str = "2003-01",
     ref_end: str = "2019-12",
 ) -> Dict[str, str]:

@@ -1,18 +1,28 @@
 """
-Nonparametric SSI (AghaKouchak-style [2015]) with month-wise ECDF and Gaussian transform.
+Nonparametric Standardized Soil Moisture Index (SSI) following AghaKouchak (2015).
 
-- compute_ssi_np(): core SSI for a single DataArray (monthly, already 0–1 m).
-- save_ssi(): writes SSI to a standardized filename using data_registry templates.
-- Supports pooled or standalone reference via optional ref_data.
+This module provides:
+  - compute_ssi_np(): core nonparametric SSI calculation for a single monthly DataArray
+    (typically depth-integrated 0–1 m soil moisture on a common 0.5° grid).
+  - save_ssi(): convenience wrapper that computes SSI and writes it to disk using
+    filename templates from the data registry (models vs. observations).
+
+The default temporal scale (in months) is taken from the global settings
+configuration (configs/settings.yml, field ssi.scale_months), so that the
+SSI pipeline stays consistent with the rest of the project.
 """
 
 from __future__ import annotations
 import numpy as np
 import xarray as xr
 from scipy.stats import norm
-from typing import Tuple, Optional, Dict
 from sm_attribution.io.registry import Registry, default_registry
 from pathlib import Path  # keep this for writing files
+
+from sm_attribution.io.settings import get_settings
+
+_SETTINGS = get_settings()
+_DEFAULT_SSI_SCALE = int(_SETTINGS.ssi.get("scale_months", 3))
 
 
 def _format_from_template(tmpl: str, **kw) -> str:
@@ -28,7 +38,7 @@ def _format_from_template(tmpl: str, **kw) -> str:
 def compute_ssi_np(
     da: xr.DataArray,
     *,
-    scale: int = 3,
+    scale: int = _DEFAULT_SSI_SCALE,
     ref_start: str = "2003-01",
     ref_end: str = "2019-12",
     ref_data: xr.DataArray | None = None,
@@ -45,7 +55,8 @@ def compute_ssi_np(
     da : xr.DataArray
         Monthly soil moisture mass [kg m-2], dims include (time, lat, lon).
     scale : int
-        Accumulation window in months.
+        Accumulation window in months. The default is taken from the global
+        settings (configs/settings.yml, field ssi.scale_months).
     ref_start, ref_end : str
         Reference period (inclusive).
     ref_data : xr.DataArray or None
@@ -89,6 +100,7 @@ def compute_ssi_np(
 
         # Valid mask per (time, grid)
         valid_ref = np.isfinite(ref_flat)
+        valid_tgt = np.isfinite(tgt_flat)
         # Sort reference values per grid (NaNs end up last if present)
         ref_sorted = np.sort(np.where(valid_ref, ref_flat, np.nan), axis=0)
 
@@ -104,6 +116,7 @@ def compute_ssi_np(
 
         # Plotting-position probability
         p = (idx - 0.44) / (n + 0.12)
+        p[~valid_tgt] = np.nan
         p = np.clip(p, 1e-6, 1 - 1e-6)
 
         z = norm.ppf(p).astype("float32")
@@ -132,12 +145,31 @@ def save_ssi(
     key: str,                 # e.g., "h08_obsclim_histsoc" or "era5land_1950_2020"
     is_model: bool,           # True for models, False for observed
     reg: Registry | None = None,
-    scale: int = 3,
+    scale: int = _DEFAULT_SSI_SCALE,
     ref_start: str = "2003-01",
     ref_end: str = "2019-12",
     mode: str = "standalone",
     ref_data: xr.DataArray | None = None,
 ) -> str:
+    """
+    Compute SSI from a preprocessed 0–1 m soil-moisture DataArray and write it to disk
+    using filename templates from the data registry.
+
+    Parameters
+    ----------
+    da_1m : xr.DataArray
+        Monthly depth-integrated soil moisture (typically 0–1 m) on the common grid.
+    key : str
+        Identifier used by the registry, e.g. "h08_obsclim_histsoc" for models or
+        "era5land_1950_2020" for observations.
+    is_model : bool
+        If True, treat "key" as "model_scenario" and use the model SSI template;
+        otherwise, use the observed SSI template.
+    reg : Registry, optional
+        Data registry instance; if None, the default_registry() is used.
+    scale, ref_start, ref_end, mode, ref_data :
+        Passed through to compute_ssi_np and used for filename formatting.
+    """
     if reg is None:
         reg = default_registry()
 
