@@ -197,36 +197,69 @@ def _maybe_block_coarsen_to_half_degree(
 def _snap_to_canonical(da: xr.DataArray) -> xr.DataArray:
     """
     Force (lat, lon) to match the canonical ISIMIP mask grid exactly
-    (same length, orientation, and bitwise-identical coordinates).
+    (same length, orientation, and bitwise-identical coordinates),
+    whenever the input grid is clearly the same 0.5° global grid up
+    to small shifts / reversals.
 
-    If shapes differ, the input is returned unchanged.
+    If the shape or spacing look incompatible, the input is returned unchanged.
     """
     if ("lat" not in da.coords) or ("lon" not in da.coords):
         return da
 
     lat_can, lon_can = get_canonical_grid()
 
-    # If shape doesn't match, do nothing
+    # Require same shape
     if da.sizes.get("lat", 0) != lat_can.size or da.sizes.get("lon", 0) != lon_can.size:
         return da
 
     lat = da["lat"].values
     lon = da["lon"].values
 
-    if np.allclose(lat, lat_can[::-1], atol=1e-6):
-        da = da.sortby("lat", ascending=False)
-        lat = da["lat"].values
+    if lat.size < 2 or lon.size < 2:
+        return da
 
-    if np.allclose(lon, lon_can[::-1], atol=1e-6):
-        da = da.sortby("lon", ascending=False)
-        lon = da["lon"].values
+    def _step(arr: np.ndarray) -> float:
+        return float(np.abs(np.median(np.diff(arr))))
 
-    # If we're now aligned (up to float noise), overwrite coords
-    if np.allclose(lat, lat_can, atol=1e-6) and np.allclose(lon, lon_can, atol=1e-6):
-        da = da.assign_coords(lat=("lat", lat_can), lon=("lon", lon_can))
+    def _compatible_axis(axis: np.ndarray, canon: np.ndarray) -> bool:
+        """Check ~0.5° spacing and endpoints close to canonical (allow small shift)."""
+        step = _step(axis)
+        step_can = _step(canon)
+        if not np.isclose(step, step_can, atol=1e-3):
+            return False
 
+        # compare axis endpoints to canonical endpoints (allow up to quarter-grid shift)
+        tol = 0.25  # degrees
+        diffs = [
+            np.abs(axis[0] - canon[0]),
+            np.abs(axis[0] - canon[-1]),
+            np.abs(axis[-1] - canon[0]),
+            np.abs(axis[-1] - canon[-1]),
+        ]
+        return np.nanmin(diffs) <= tol
+
+    if not _compatible_axis(lat, lat_can) or not _compatible_axis(lon, lon_can):
+        # Doesn't look like the same grid → leave untouched
+        return da
+
+    # Match orientation of canonical grid
+    lat_can_asc = lat_can[1] > lat_can[0]
+    lon_can_asc = lon_can[1] > lon_can[0]
+
+    lat_asc = lat[1] > lat[0]
+    lon_asc = lon[1] > lon[0]
+
+    if lat_asc != lat_can_asc:
+        da = da.sortby("lat", ascending=lat_can_asc)
+    if lon_asc != lon_can_asc:
+        da = da.sortby("lon", ascending=lon_can_asc)
+
+    # Overwrite with canonical coordinates (bit-identical)
+    da = da.assign_coords(
+        lat=("lat", lat_can.astype(da["lat"].dtype)),
+        lon=("lon", lon_can.astype(da["lon"].dtype)),
+    )
     return da
-
 
 # -----------------------------------------------------------------------------
 # ERA5-Land — 0–1 m soil moisture, monthly 0.5°
@@ -237,12 +270,13 @@ def era5land_to_1m_monthly_halfdeg_v1(registry) -> xr.DataArray:
     Build ERA5-Land 0–1 m soil moisture (kg m-2) as monthly means on a 0.5°
     grid using swvl1–3 volumetric layers.
 
-    Steps:
-      - Read monthly ERA5-Land files from the registry (single file or glob).
-      - Normalize coordinates and restrict time to 1950–2020.
-      - Convert volumetric layers (0–7, 7–28, 28–100 cm) to 0–1 m mass.
-      - Coarsen from 0.1° to 0.5° by block mean.
-      - Snap to canonical ISIMIP 0.5° grid when shape-compatible.
+    Steps
+    -----
+    - Read monthly ERA5-Land files from the registry (single file or glob).
+    - Normalize coordinates and restrict time to 1950–2020.
+    - Convert volumetric layers (0–7, 7–28, 28–100 cm) to 0–1 m mass.
+    - Coarsen from 0.1° to 0.5° by block mean (or xESMF if needed).
+    - Snap to canonical ISIMIP 0.5° grid when shape-compatible.
     """
     path = registry.get_obs_raw("era5land")
 
@@ -283,7 +317,7 @@ def era5land_to_1m_monthly_halfdeg_v1(registry) -> xr.DataArray:
     # Drop helper / auxiliary variables if present
     ds = _drop_vars_if_present(ds, ["number", "expver"])
 
-    # Ensure longitudes in [-180,180), lat ascending
+    # Ensure longitudes in [-180, 180), lat ascending
     ds = _to_lon_m180_180(ds)
     if "lat" in ds.coords and (ds.lat.size > 1) and (ds.lat[1] < ds.lat[0]):
         ds = ds.sortby("lat")
@@ -303,25 +337,29 @@ def era5land_to_1m_monthly_halfdeg_v1(registry) -> xr.DataArray:
     sm = (l1 * thick[0] + l2 * thick[1] + l3 * thick[2]) * np.float32(1000.0)  # kg m-2
     sm.name = "soilmoist_1m"
 
-    # Regrid from 0.1° to 0.5° via block mean (or xESMF if needed)
+    # Regrid from 0.1° to 0.5° via block mean (or xESMF if needed).
+    # This already includes a safe `_snap_to_canonical` call that only
+    # overwrites coords when they truly match the canonical grid.
     sm = _maybe_block_coarsen_to_half_degree(sm, allow_xesmf=True)
 
-    # Snap ERA5-Land 0.5° grid to canonical mask grid if compatible
-    try:
-        lat_can, lon_can = get_canonical_grid()
-        if (
-            "lat" in sm.coords
-            and "lon" in sm.coords
-            and sm.sizes["lat"] == lat_can.size
-            and sm.sizes["lon"] == lon_can.size
-        ):
-            sm = sm.assign_coords(
-                lat=("lat", lat_can.astype(sm["lat"].dtype)),
-                lon=("lon", lon_can.astype(sm["lon"].dtype)),
-            )
-    except Exception:
-        # If anything goes wrong, keep the original coordinates
-        pass
+    # Harmonize chunking for writing
+    if {"time", "lat", "lon"}.issubset(sm.dims):
+        sm = sm.chunk({"time": 12, "lat": 300, "lon": 600})
+
+    sm.attrs.update({
+        "units": "kg m-2",
+        "long_name": "ERA5-Land 0–1 m soil moisture (converted from swvl1–3 volumetric)",
+        "method": "sum(theta_i * thickness_i * 1000) for layers 1–3, block-mean to 0.5°",
+        "calendar": "proleptic_gregorian",
+        "target_depth_m": 1.0,
+        "source_files": str(open_target),
+        "note": (
+            "Input is a single CDS NetCDF or a set of files; "
+            "time normalized to proleptic monthly and clipped to 1950–2020."
+        ),
+    })
+
+    return sm
 
     # NOTE: The chunking and attribute assignment for ERA5-Land appear below
     # due to historical edits and are left unchanged to preserve behavior.
