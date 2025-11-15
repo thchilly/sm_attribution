@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Build homogenized observational soil-moisture datasets (monthly, 0.5°, ~0–1 m).
+Build homogenized observational soil-moisture datasets (monthly, 0.5°, ~0-1 m).
 
 This script processes a collection of observational and reanalysis
 soil-moisture products and converts each into a common reference format
@@ -9,13 +9,13 @@ evaluation.  The homogenization includes:
 
     • Temporal harmonization:      conversion to monthly means
     • Spatial harmonization:       regridding to a uniform 0.5° lat/lon grid
-    • Depth harmonization:         conversion to an approximate 0–1 m
+    • Depth harmonization:         conversion to an approximate 0-1 m
                                    soil-moisture equivalent (where possible)
     • Grid alignment:              snapping to the canonical ISIMIP 0.5° grid
     • Calendar normalization:      enforcing a proleptic_gregorian monthly axis
 
 Different source datasets provide soil moisture at different depths,
-temporal resolutions, and native grids (0.05°, 0.1°, 0.25°, 0.5°).  
+temporal resolutions, and native grids (0.05°, 0.1°, 0.25°, 0.5°).
 Each dataset is processed using its dedicated pipeline defined in
 `sm_attribution.preprocess.observations`, ensuring consistent units,
 coordinate definitions, metadata, and land-mask boundaries.
@@ -30,30 +30,29 @@ USAGE
 
 Build a specific dataset:
 
-    python scripts/build_observed_1m.py --dataset era5land_1950_2020
+    python scripts/build_observed_1m.py --dataset era5-land
 
 Specify a custom data registry:
 
-    python scripts/build_observed_1m.py --dataset gldas_v21_2000_2020 \
+    python scripts/build_observed_1m.py --dataset gldas-v21 \
                                         --registry configs/data_registry.yml
 
 ---
 SUPPORTED DATASET KEYS
 ----------------------
 
-    era5land_1950_2020
-    gleam42a_1980_2020
-    gleam42a_2003_2020
-    gleam42b_2003_2020
-    gldas_v20_1948_2014
-    gldas_v21_2000_2020
-    somo_ml_0p5m_2000_2019
-    gracedadm_2003_2020
-    merra2_1980_2020
-    gdo_ensmia_2001_2020
-    gdo_smia_1995_2020
+    era5-land
+    gleam-42a
+    gleam-42b
+    gldas-v20
+    gldas-v21
+    somo-ml
+    grace-da-dm
+    merra2-land
+    gdo-ensmia
+    gdo-smia
 
-Each dataset’s processing pipeline is tailored to its native resolution,
+Each dataset's processing pipeline is tailored to its native resolution,
 vertical structure, temporal frequency, and data format (NetCDF, GeoTIFF).
 
 ---
@@ -66,7 +65,7 @@ Each invocation produces a single NetCDF file with:
     • Grid:         canonical ISIMIP 0.5° grid
     • Calendar:     proleptic_gregorian, monthly timestamps (MS)
     • Variables:    soilmoist_1m or soilmoist_anom_std
-    • Encoding:     float32, zlib compression, fill value −9999
+    • Encoding:     float32, zlib compression, fill value -9999
     • Chunking:     (12, 180, 360)
 
 """
@@ -80,7 +79,6 @@ from sm_attribution.io.registry import Registry
 from sm_attribution.preprocess.observations import (
     era5land_to_1m_monthly_halfdeg_v1,
     gleam42a_1980_2020_v0,
-    gleam42a_2003_2020_v0,
     gleam42b_2003_2020_v0,
     gldas_v20_to_1m_monthly_halfdeg_v0,
     gldas_v21_to_1m_monthly_halfdeg_v0,
@@ -91,19 +89,18 @@ from sm_attribution.preprocess.observations import (
     gdo_smia_to_monthly_halfdeg_v0,
 )
 
-# Supported dataset keys for the CLI
+# Supported dataset keys for the CLI (must match data_registry.yml observed_1m keys)
 DATASET_CHOICES = [
-    "era5land_1950_2020",
-    "gleam42a_1980_2020",
-    "gleam42a_2003_2020",
-    "gleam42b_2003_2020",
-    "gldas_v20_1948_2014",
-    "gldas_v21_2000_2020",
-    "somo_ml_0p5m_2000_2019",
-    "gracedadm_2003_2020",
-    "merra2_1980_2020",
-    "gdo_ensmia_2001_2020",
-    "gdo_smia_1995_2020",
+    "era5-land",
+    "gleam-42a",
+    "gleam-42b",
+    "gldas-v20",
+    "gldas-v21",
+    "somo-ml",
+    "grace-da-dm",
+    "merra2-land",
+    "gdo-ensmia",
+    "gdo-smia",
 ]
 
 
@@ -128,58 +125,53 @@ def main() -> None:
 
     ds_out = None
 
-    if args.dataset == "era5land_1950_2020":
+    if args.dataset == "era5-land":
         da = era5land_to_1m_monthly_halfdeg_v1(reg)
-        out_path = reg.get_obs_processed("era5land_1950_2020")
+        out_path = reg.get_obs_processed("era5-land")
         ds_out = da.to_dataset(name="soilmoist_1m")
 
-    elif args.dataset == "gleam42a_1980_2020":
+    elif args.dataset == "gleam-42a":
         da = gleam42a_1980_2020_v0(reg)
-        out_path = reg.get_obs_processed("gleam42a_1980_2020")
+        out_path = reg.get_obs_processed("gleam-42a")
         ds_out = da.to_dataset(name="soilmoist_1m")
 
-    elif args.dataset == "gleam42a_2003_2020":
-        da = gleam42a_2003_2020_v0(reg)
-        out_path = reg.get_obs_processed("gleam42a_2003_2020")
-        ds_out = da.to_dataset(name="soilmoist_1m")
-
-    elif args.dataset == "gleam42b_2003_2020":
+    elif args.dataset == "gleam-42b":
         da = gleam42b_2003_2020_v0(reg)
-        out_path = reg.get_obs_processed("gleam42b_2003_2020")
+        out_path = reg.get_obs_processed("gleam-42b")
         ds_out = da.to_dataset(name="soilmoist_1m")
 
-    elif args.dataset == "gldas_v20_1948_2014":
+    elif args.dataset == "gldas-v20":
         da = gldas_v20_to_1m_monthly_halfdeg_v0(reg)
-        out_path = reg.get_obs_processed("gldas_v20_1948_2014")
+        out_path = reg.get_obs_processed("gldas-v20")
         ds_out = da.to_dataset(name="soilmoist_1m")
 
-    elif args.dataset == "gldas_v21_2000_2020":
+    elif args.dataset == "gldas-v21":
         da = gldas_v21_to_1m_monthly_halfdeg_v0(reg)
-        out_path = reg.get_obs_processed("gldas_v21_2000_2020")
+        out_path = reg.get_obs_processed("gldas-v21")
         ds_out = da.to_dataset(name="soilmoist_1m")
 
-    elif args.dataset == "somo_ml_0p5m_2000_2019":
+    elif args.dataset == "somo-ml":
         ds_out = somoml_to_0p5m_monthly_halfdeg_v0(reg)
-        out_path = reg.get_obs_processed("somo_ml_0p5m_2000_2019")
+        out_path = reg.get_obs_processed("somo-ml")
 
-    elif args.dataset == "gracedadm_2003_2020":
+    elif args.dataset == "grace-da-dm":
         da = gracedadm_rootzone_to_monthly_halfdeg_v0(reg)
-        out_path = reg.get_obs_processed("gracedadm_2003_2020")
+        out_path = reg.get_obs_processed("grace-da-dm")
         ds_out = da.to_dataset(name="rootzone_percentile")
 
-    elif args.dataset == "merra2_1980_2020":
+    elif args.dataset == "merra2-land":
         da = merra2_land_to_1m_monthly_halfdeg_v1(reg)
-        out_path = reg.get_obs_processed("merra2_1980_2020")
+        out_path = reg.get_obs_processed("merra2-land")
         ds_out = da.to_dataset(name="soilmoist_1m")
 
-    elif args.dataset == "gdo_ensmia_2001_2020":
+    elif args.dataset == "gdo-ensmia":
         da = gdo_ensmia_to_monthly_halfdeg_v0(reg)
-        out_path = reg.get_obs_processed("gdo_ensmia_2001_2020")
+        out_path = reg.get_obs_processed("gdo-ensmia")
         ds_out = da.to_dataset(name="soilmoist_anom_std")
 
-    elif args.dataset == "gdo_smia_1995_2020":
+    elif args.dataset == "gdo-smia":
         da = gdo_smia_to_monthly_halfdeg_v0(reg)
-        out_path = reg.get_obs_processed("gdo_smia_1995_2020")
+        out_path = reg.get_obs_processed("gdo-smia")
         ds_out = da.to_dataset(name="soilmoist_anom_std")
 
     else:
@@ -188,9 +180,9 @@ def main() -> None:
 
     if ds_out is not None:
         # NetCDF encoding: compression + fill values per primary variable
-        if args.dataset == "gracedadm_2003_2020":
+        if args.dataset == "grace-da-dm":
             var_name = "rootzone_percentile"
-        elif args.dataset in ("gdo_ensmia_2001_2020", "gdo_smia_1995_2020"):
+        elif args.dataset in ("gdo-ensmia", "gdo-smia"):
             var_name = "soilmoist_anom_std"
         else:
             var_name = "soilmoist_1m"

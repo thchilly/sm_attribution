@@ -51,14 +51,14 @@ MODELS = [
 ]
 
 # Observational products for which SSI is computed
+# (only SSI/SM-type products, no anomaly-only datasets like GDO)
 OBS = [
-    "era5land_1950_2020",
-    "gleam42a_1980_2020",
-    "gleam42a_2003_2020",
-    "gleam42b_2003_2020",
-    "gldas_v21_2000_2020",
-    "somo_ml_0p5m_2000_2019",
-    "merra2_1980_2020",
+    "era5-land",
+    "gleam-42a",
+    "gleam-42b",
+    "gldas-v21",
+    "somo-ml",
+    "merra2-land",
 ]
 
 

@@ -111,18 +111,16 @@ observations:
   gracedadm_weekly:
     path: "/Users/thchilly/projects/sm_attribution/data/observed/GRACEDADM/raw_weekly_files/GRACEDADM_CLSM025GL_7D.A*.030.nc4"
     notes: "GRACE-DA-DM Global v3.0 weekly percentiles (sfsm_inst, rtzsm_inst, gws_inst), 0.25°. Aggregate to monthly and coarsen to 0.5°. Use rtzsm_inst for root-zone."
-  # grace-da-dm: add later
   merra2_land:
     path: "/Users/thchilly/projects/sm_attribution/data/observed/MERRA2-LAND/raw_files/MERRA2_*.tavgM_2d_lnd_Nx.*.nc4"
     notes: "MERRA-2 Land (tavgM_2d_lnd_Nx, monthly 0.5°×0.625°). Variables: SFMC and RZMC volumetric (m³/m³). Use blended 0.05×SFMC + 0.95×RZMC to create 0–1 m equivalent (1980–2020)."
-
   gdo_ensmia:
     path: "/Users/thchilly/projects/sm_attribution/data/observed/GDO-ENSMIA/smant_m_wld_*.nc"
     notes: "GDO Ensemble Soil Moisture Anomaly (ten-daily standardized anomaly, 0.1°). Preprocess: select 3rd dekad per month (full-month window), then 0.1°→0.5° by 5×5 block mean. Units: dimensionless; baseline 2001–2016."
-
   gdo_smia:
     path: "/Users/thchilly/projects/sm_attribution/data/observed/GDO-SMIA/**/smang_m_gdo_*_t_300_z01.tif"
     notes: "GDO SMIA (LISFLOOD-only SMA, 1 arcmin) GeoTIFFs nested by year; pattern uses ** for recursive glob. Ten-daily standardized anomaly; use 3rd dekad per month; coarsen 0.1°→0.5° by 5×5 mean."
+
 # --------------------------------------------------------------------
 # PROCESSED OUTPUTS — after homogenization to 0–1 m (models + observations)
 processed:
@@ -164,17 +162,16 @@ processed:
       counterclim_1901soc:    "/Users/thchilly/projects/sm_attribution/data/models_1m/lpjml5-7-10-fire_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
 
   observed_1m:
-    era5land_1950_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/ERA5-LAND/ERA5L_soilmoist_1m_monthly_0p5deg_1950_2020.nc"
-    gleam42a_1980_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLEAM/GLEAM_v4.2a_SMrz_monthly_0p5deg_1980_2020_v0.nc"
-    gleam42a_2003_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLEAM/GLEAM_v4.2a_SMrz_monthly_0p5deg_2003_2020_v0.nc"
-    gleam42b_2003_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLEAM/GLEAM_v4.2b_SMrz_monthly_0p5deg_2003_2020_v0.nc"
-    gldas_v20_1948_2014: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLDAS/GLDAS_NOAH_v2.0_soilmoist_1m_monthly_0p5deg_1948_2014_v0.nc"
-    gldas_v21_2000_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLDAS/GLDAS_NOAH_v2.1_soilmoist_1m_monthly_0p5deg_2000_2020_v0.nc"
-    somo_ml_0p5m_2000_2019: "/Users/thchilly/projects/sm_attribution/data/observed_1m/SoMo-ML/SoMoML_v1_soilmoist_0p5m_monthly_0p5deg_2000_2019_v0.nc"
-    gracedadm_2003_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GRACEDADM/GRACEDADM_CLSM025GL_rootzone_percentile_monthly_0p5deg_2003_2020_v0.nc"
-    merra2_1980_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/MERRA2-LAND/MERRA2L_soilmoist_1m_monthly_0p5deg_1980_2020_v0.nc"
-    gdo_ensmia_2001_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GDO-ENSMIA/GDO_ENSMIA_soilmoist_anom_std_monthly_0p5deg_2001_2020_v0.nc"
-    gdo_smia_1995_2020: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GDO-SMIA/gdo_smia_soilmoist_anom_std_monthly_0p5deg_1995_2020_v0.nc"
+    era5-land: "/Users/thchilly/projects/sm_attribution/data/observed_1m/ERA5-LAND/ERA5L_soilmoist_1m_monthly_0p5deg_1950_2020.nc"
+    gleam-42a: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLEAM/GLEAM_v4.2a_SMrz_monthly_0p5deg_1980_2020_v0.nc"
+    gleam-42b: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLEAM/GLEAM_v4.2b_SMrz_monthly_0p5deg_2003_2020_v0.nc"
+    gldas-v20: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLDAS/GLDAS_NOAH_v2.0_soilmoist_1m_monthly_0p5deg_1948_2014_v0.nc"
+    gldas-v21: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLDAS/GLDAS_NOAH_v2.1_soilmoist_1m_monthly_0p5deg_2000_2020_v0.nc"
+    somo-ml: "/Users/thchilly/projects/sm_attribution/data/observed_1m/SOMO-ML/SoMoML_v1_soilmoist_0p5m_monthly_0p5deg_2000_2019_v0.nc"
+    grace-da-dm: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GRACE-DA-DM/GRACEDADM_CLSM025GL_rootzone_percentile_monthly_0p5deg_2003_2020_v0.nc"
+    merra2-land: "/Users/thchilly/projects/sm_attribution/data/observed_1m/MERRA2-LAND/MERRA2L_soilmoist_1m_monthly_0p5deg_1980_2020_v0.nc"
+    gdo-ensmia: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GDO-ENSMIA/GDO_ENSMIA_soilmoist_anom_std_monthly_0p5deg_2001_2020_v0.nc"
+    gdo-smia: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GDO-SMIA/gdo_smia_soilmoist_anom_std_monthly_0p5deg_1995_2020_v0.nc"
 
 # --------------------------------------------------------------------
 # configs/data_registry.yml
@@ -193,4 +190,6 @@ ancils:
     greenland_gl: "{paths.root}/ancils/_land_mask/gl_shp/gl.shp"
     
 metrics:
-  correlations_map: "{paths.root}/metrics/correlations/{mode}/ref_2004_2019/maps/corr_{target}_{obs}_{model}_{scenario}.nc"
+  correlations_map: >
+    {paths.root}/metrics/correlations/{mode}/ref_{corrstart_yr}_{corrend_yr}/{obs_short}/
+    corr_{target}_{obs_short}_{model}_{scenario}_{corrstart_yr}_{corrend_yr}.nc
