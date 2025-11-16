@@ -190,6 +190,6 @@ ancils:
     greenland_gl: "{paths.root}/ancils/_land_mask/gl_shp/gl.shp"
     
 metrics:
-  correlations_map: >
-    {paths.root}/metrics/correlations/{mode}/ref_{corrstart_yr}_{corrend_yr}/{obs_short}/
-    corr_{target}_{obs_short}_{model}_{scenario}_{corrstart_yr}_{corrend_yr}.nc
+  correlations_map: "{paths.root}/metrics/correlations/{mode}/ref_{corrstart_yr}_{corrend_yr}/{obs_short}/corr_{target}_{obs_short}_{model}_{scenario}_{corrstart_yr}_{corrend_yr}.nc"
+
+  correlations_multimodel_map: "{paths.root}/metrics/correlations/{mode}/ref_{corrstart_yr}_{corrend_yr}/{obs_short}/multi-model/corr_{target}_{obs_short}_multi-model_{scenario}_{corrstart_yr}_{corrend_yr}.nc"
