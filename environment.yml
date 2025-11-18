@@ -29,3 +29,4 @@ dependencies:
   # nc mask handling
   - geopandas
   - shapely
+  - regionmask
