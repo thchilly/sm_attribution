@@ -23,20 +23,20 @@ import matplotlib.colors as mcolors
 import cartopy.crs as ccrs
 import xarray as xr
 
-from sm_attribution.analysis.ensemble import (
-    correlation_multimodel_map_path,
+from sm_attribution.analysis.ensemble import correlation_multimodel_map_path
+from sm_attribution.analysis.ar6_regions import (
+    ar6_mean_and_field,
+    get_ar6_land_regions,
 )
-from sm_attribution.analysis.ar6_regions import ar6_mean_and_field
-from sm_attribution.io.registry import default_registry
 
 # ---------------------------------------------------------------------
 # Configuration (easy to tweak)
 # ---------------------------------------------------------------------
 
 
-# Default observational rows: key in registry + which "target" to use
 @dataclass
 class ObsRow:
+    """One observational product row in the multifigure."""
     key: str          # e.g. "era5-land"
     target: str       # "ssi" or "anomaly"
     label: str        # row label for plotting
@@ -47,33 +47,34 @@ DEFAULT_OBS_ROWS: List[ObsRow] = [
     ObsRow("gleam-42a",   "ssi",     "GLEAM v4.2a SMrz"),
     ObsRow("gleam-42b",   "ssi",     "GLEAM v4.2b SMrz"),
     ObsRow("gldas-v21",   "ssi",     "GLDAS-NOAH v2.1"),
-    ObsRow("somo-ml",     "ssi",     "SoMo.ml 0–0.5 m"),
+    ObsRow("somo-ml",     "ssi",     "SoMo.ml 0-0.5 m"),
     ObsRow("merra2-land", "ssi",     "MERRA-2 Land 0–1 m"),
     ObsRow("gdo-ensmia",  "anomaly", "GDO ENSMIA (anom)"),
     ObsRow("gdo-smia",    "anomaly", "GDO SMIA (anom)"),
 ]
 
-
 # Equal-area style projection for global maps
 DEFAULT_PROJ = ccrs.Mollweide()
 
-# Classes for the absolute correlation (r)
-DEFAULT_R_BINS = [-1.0, 0.0, 0.4, 0.6, 0.8, 1.0]
+# Classes for the absolute correlation (r);
+# first bin [-1, 0) is red; remaining bins are increasing blues.
+DEFAULT_R_BINS = [-1.0, 0.0, 0.2, 0.4, 0.7, 0.9, 1.0]
 DEFAULT_R_COLORS = [
     "#b2182b",  # r < 0 : reddish
-    "#deebf7",
-    "#9ecae1",
-    "#4292c6",
-    "#08519c",  # r >= 0.8 : deep blue
+    "#deebf7",  # 0–0.2 (lightest blue)
+    "#9ecae1",  # 0.2–0.4
+    "#4292c6",  # 0.4–0.7
+    "#08519c",  # 0.7–0.9
+    "#08306b",  # 0.9–1.0 (deepest blue)
 ]
 
-# Classes for the difference in r between scenarios
+# Classes for the difference in r between scenarios (Δr)
 DEFAULT_DIFF_BINS = [-1.0, -0.1, -0.05, -0.01, 0.0, 0.01, 0.05, 0.1, 1.0]
 DEFAULT_DIFF_COLORS = [
     "#762a83",
     "#af8dc3",
     "#e7d4e8",
-    "#f7f7f7",
+    "#faf0fa",
     "#d9f0d3",
     "#7fbf7b",
     "#1b7837",
@@ -107,30 +108,24 @@ def _load_mm_corr(
     return xr.open_dataset(path)
 
 
-import matplotlib.colors as mcolors
-
 def _classified_norm_and_cmap(bins, colors):
     """
     Return a BoundaryNorm + ListedColormap from bins/colours.
 
-    If there are more bins (including 'extend' regions) than colours,
-    pad the colour list by repeating the last colour so that
-    BoundaryNorm does not raise a ValueError.
+    We assume len(colors) == len(bins) - 1 (one colour per interval).
+    If there are fewer colours than intervals, pad by repeating
+    the last colour. No 'extend' regions are used so the first
+    colour corresponds exactly to bins[0]–bins[1], etc.
     """
     bins = list(bins)
     colors = list(colors)
 
-    while True:
-        cmap = mcolors.ListedColormap(colors)
-        try:
-            # extend="both" adds extra regions for <min and >max
-            norm = mcolors.BoundaryNorm(bins, ncolors=cmap.N, extend="both")
-            break
-        except ValueError:
-            # Not enough colours for the number of regions: pad by
-            # repeating the last colour and try again.
-            colors.append(colors[-1])
+    n_intervals = len(bins) - 1
+    if len(colors) < n_intervals:
+        colors = colors + [colors[-1]] * (n_intervals - len(colors))
 
+    cmap = mcolors.ListedColormap(colors[:n_intervals])
+    norm = mcolors.BoundaryNorm(bins, ncolors=cmap.N, clip=True)
     return cmap, norm
 
 
@@ -141,6 +136,7 @@ def _plot_global_map(
     bins: Iterable[float],
     colors: Iterable[str],
     title: str,
+    draw_ar6_outlines: bool = False,
 ):
     """Classified pcolormesh on a global map axis."""
     cmap, norm = _classified_norm_and_cmap(bins, colors)
@@ -149,7 +145,6 @@ def _plot_global_map(
     ax.coastlines(linewidth=0.4)
     ax.gridlines(draw_labels=False, linewidth=0.2, color="lightgray", alpha=0.5)
 
-    # Use pcolormesh with PlateCarree (lat/lon)
     mesh = ax.pcolormesh(
         da["lon"],
         da["lat"],
@@ -157,7 +152,20 @@ def _plot_global_map(
         transform=ccrs.PlateCarree(),
         cmap=cmap,
         norm=norm,
+        shading="auto",
     )
+
+    if draw_ar6_outlines:
+        regions = get_ar6_land_regions()
+        regions.plot(
+            ax=ax,
+            add_label=False,
+            add_ocean=False,
+            add_land=False,
+            line_kws={"linewidth": 0.4, "color": "black"},
+            coastline_kws={"linewidth": 0.0},
+        )
+
     ax.set_title(title, fontsize=9)
     return mesh
 
@@ -180,7 +188,7 @@ def plot_corr_multifig(
     r_colors: Iterable[str] = DEFAULT_R_COLORS,
     diff_bins: Iterable[float] = DEFAULT_DIFF_BINS,
     diff_colors: Iterable[str] = DEFAULT_DIFF_COLORS,
-    figsize=(12, 16),
+    figsize=(12, 21),
 ) -> plt.Figure:
     """
     Build a multi-panel figure comparing scenarios across observational products.
@@ -191,30 +199,6 @@ def plot_corr_multifig(
       Col 2: Same as Col 1 but aggregated to AR6 regions.
       Col 3: AR6-aggregated difference in multi-model mean correlation:
              `scenario_base` minus `scenario_counter`.
-
-    Parameters
-    ----------
-    obs_rows : iterable of ObsRow, optional
-        Rows to plot. Defaults to DEFAULT_OBS_ROWS.
-    scenario_base, scenario_counter : str
-        Scenario names, e.g. 'obsclim_histsoc' and 'counterclim_histsoc'.
-    mode : {'standalone', 'pooled'}
-        SSI mode used when computing correlations.
-    corr_start, corr_end : str
-        Correlation period (YYYY-MM strings).
-    proj : cartopy.crs, optional
-        Map projection for all panels.
-    r_bins, r_colors : iterable
-        Class boundaries and colours for absolute correlation r.
-    diff_bins, diff_colors : iterable
-        Class boundaries and colours for scenario differences in r.
-    figsize : tuple
-        Figure size passed to plt.subplots.
-
-    Returns
-    -------
-    fig : matplotlib.figure.Figure
-        The created figure. Axes can be accessed via fig.axes.
     """
     if obs_rows is None:
         obs_rows = DEFAULT_OBS_ROWS
@@ -228,13 +212,14 @@ def plot_corr_multifig(
         ncols,
         figsize=figsize,
         subplot_kw={"projection": proj},
-        constrained_layout=True,
+        constrained_layout=False,
     )
 
     if nrows == 1:
         axes = axes.reshape(1, -1)
 
-    # For column-wise colourbars
+    # For column-wise colourbars (we'll place them manually, so this
+    # list is only to grab the mappable)
     meshes_col1 = []
     meshes_col3 = []
 
@@ -276,7 +261,7 @@ def plot_corr_multifig(
             r_base,
             bins=r_bins,
             colors=r_colors,
-            title=f"{label}\n{scenario_base} (multi-model r)",
+            title=f"{label}\nMulti-model FC correlation (multi-model mean)",
         )
         meshes_col1.append(mesh1)
 
@@ -288,7 +273,8 @@ def plot_corr_multifig(
             reg_field,
             bins=r_bins,
             colors=r_colors,
-            title=f"{label}\nAR6 mean r ({scenario_base})",
+            title=f"{label}\nMulti-model FC correlation (AR6 region average)",
+            draw_ar6_outlines=True,
         )
 
         # Col 3: AR6-aggregated difference (base - counter)
@@ -302,49 +288,45 @@ def plot_corr_multifig(
             diff_field,
             bins=diff_bins,
             colors=diff_colors,
-            title=f"{label}\nΔr (base−counter)",
+            title=f"{label}\nGain in correlation [FC−CfC] (AR6 region average)",
+            draw_ar6_outlines=True,
         )
         meshes_col3.append(mesh3)
 
-        # Row label on the left side (y-axis)
-        ax1.text(
-            -0.05,
-            0.5,
-            label,
-            transform=ax1.transAxes,
-            rotation=90,
-            va="center",
-            ha="right",
-            fontsize=9,
-        )
-
-    # Column titles
-    axes[0, 0].set_title(f"{scenario_base} (multi-model r)", fontsize=10)
-    axes[0, 1].set_title(f"{scenario_base} – AR6 region means", fontsize=10)
-    axes[0, 2].set_title(
-        f"{scenario_base} − {scenario_counter} (AR6 Δr)", fontsize=10
+    # Adjust spacing: more vertical whitespace between rows,
+    # but keep all map axes the same size.
+    fig.subplots_adjust(
+        hspace=0.2,
+        wspace=0.02,
+        top=0.96,
+        bottom=0.08,
+        left=0.03,
+        right=0.97,
     )
 
-    # Shared colourbars for col 1 and col 3
+    # ------------------------------------------------------------------
+    # Colourbars: place them in fixed figure coordinates so they do not
+    # change the size of any particular column.
+    # ------------------------------------------------------------------
+    # Left colourbar (for r)
+    cax1 = fig.add_axes([0.10, 0.06, 0.35, 0.01])  # [left, bottom, width, height]
     cbar1 = fig.colorbar(
         meshes_col1[0],
-        ax=[axes[i, 0] for i in range(nrows)],
+        cax=cax1,
         orientation="horizontal",
-        fraction=0.03,
-        pad=0.05,
     )
     cbar1.set_label("Pearson r (multi-model mean)")
 
+    # Right colourbar (for Δr)
+    cax3 = fig.add_axes([0.55, 0.06, 0.35, 0.01])
     cbar3 = fig.colorbar(
         meshes_col3[0],
-        ax=[axes[i, 2] for i in range(nrows)],
+        cax=cax3,
         orientation="horizontal",
-        fraction=0.03,
-        pad=0.05,
     )
     cbar3.set_label(
         f"Δr = r({scenario_base}) − r({scenario_counter}) "
-        f" [{corrstart_yr}–{corrend_yr}]"
+        f"[{corrstart_yr}–{corrend_yr}]"
     )
 
     return fig
