@@ -28,6 +28,7 @@ from sm_attribution.analysis.ar6_regions import (
     ar6_mean_and_field,
     get_ar6_land_regions,
 )
+from sm_attribution.metadata.obs_groups import OBS_GROUPS
 
 # ---------------------------------------------------------------------
 # Configuration (easy to tweak)
@@ -41,7 +42,6 @@ class ObsRow:
     target: str       # "ssi" or "anomaly"
     label: str        # row label for plotting
 
-
 DEFAULT_OBS_ROWS: List[ObsRow] = [
     ObsRow("era5-land",   "ssi",     "ERA5-Land 0–1 m"),
     ObsRow("gleam-42a",   "ssi",     "GLEAM v4.2a SMrz"),
@@ -52,10 +52,23 @@ DEFAULT_OBS_ROWS: List[ObsRow] = [
     ObsRow("grace-da-dm", "ssi", "GRACE-DA-DM root-zone"),
     ObsRow("gdo-ensmia",  "anomaly", "GDO ENSMIA (anom)"),
     ObsRow("gdo-smia",    "anomaly", "GDO SMIA (anom)"),
-]
+ ]
 
-# Equal-area style projection for global maps
-DEFAULT_PROJ = ccrs.Mollweide()
+FORCING_GROUPS = {k: v["group"] for k, v in OBS_GROUPS.items()}
+GROUP_LABELS = {
+    1: "Reanalysis-based datasets",
+    2: "Satellite-based datasets",
+    3: "Hybrid (Reanalysis + Satellite) datasets",
+    4: "In-situ / ML-based datasets",
+}
+
+# Equal-area style projection for global maps (keep all - use one at a time)
+# DEFAULT_PROJ = ccrs.Mollweide()
+DEFAULT_PROJ = ccrs.EckertIV()
+# DEFAULT_PROJ = ccrs.EckertVI()
+# DEFAULT_PROJ = ccrs.LambertCylindrical()
+# DEFAULT_PROJ = ccrs.Sinusoidal()
+
 
 # Classes for the absolute correlation (r);
 # first bin [-1, 0) is red; remaining bins are increasing blues.
@@ -189,7 +202,7 @@ def plot_corr_multifig(
     r_colors: Iterable[str] = DEFAULT_R_COLORS,
     diff_bins: Iterable[float] = DEFAULT_DIFF_BINS,
     diff_colors: Iterable[str] = DEFAULT_DIFF_COLORS,
-    figsize=(12, 23.5),
+    figsize=(12, 24.5),
 ) -> plt.Figure:
     """
     Build a multi-panel figure comparing scenarios across observational products.
@@ -204,7 +217,21 @@ def plot_corr_multifig(
     if obs_rows is None:
         obs_rows = DEFAULT_OBS_ROWS
 
+    # ------------------------------------------------------------------
+    # Attach forcing-group IDs and sort rows by group, then by label
+    # ------------------------------------------------------------------
     obs_rows = list(obs_rows)
+    rows_with_group: List[tuple[int, ObsRow]] = []
+    for row in obs_rows:
+        g = FORCING_GROUPS.get(row.key, 999)  # 999 = unknown/other
+        rows_with_group.append((g, row))
+
+    rows_with_group.sort(key=lambda gr: (gr[0], gr[1].label))
+
+    groups_for_rows = [g for g, _ in rows_with_group]
+    obs_rows_sorted = [r for _, r in rows_with_group]
+    obs_rows = obs_rows_sorted
+
     nrows = len(obs_rows)
     ncols = 3
 
@@ -297,13 +324,41 @@ def plot_corr_multifig(
     # Adjust spacing: more vertical whitespace between rows,
     # but keep all map axes the same size.
     fig.subplots_adjust(
-        hspace=0.2,
+        hspace=0.29,
         wspace=0.02,
-        top=0.96,
+        top=0.95,
         bottom=0.08,
         left=0.03,
         right=0.97,
     )
+
+    # ------------------------------------------------------------------
+    # Add group subtitles above the first row of each forcing group
+    # ------------------------------------------------------------------
+    seen_groups: set[int] = set()
+    for irow, row in enumerate(obs_rows):
+        g = groups_for_rows[irow]
+        if g in seen_groups or g == 999:
+            continue
+        seen_groups.add(g)
+
+        row_axes = axes[irow, :]
+        left = row_axes[0].get_position().x0
+        right = row_axes[-1].get_position().x1
+        top = max(ax.get_position().y1 for ax in row_axes)
+
+        x = 0.5 * (left + right)
+        y = top + 0.015   # was 0.01; a bit closer to the row
+
+        fig.text(
+            x,
+            y,
+            GROUP_LABELS.get(g, f"Group {g}"),
+            ha="center",
+            va="bottom",
+            fontsize=10,
+            fontweight="bold",
+        )
 
     # ------------------------------------------------------------------
     # Colourbars: place them in fixed figure coordinates so they do not
