@@ -19,7 +19,6 @@ def get_ar6_land_regions() -> regionmask.Regions:
     """Return the AR6 land regions definition from regionmask."""
     return regionmask.defined_regions.ar6.land
 
-
 def ar6_mean_and_field(
     da: xr.DataArray,
     min_valid: int = 10,
@@ -38,7 +37,7 @@ def ar6_mean_and_field(
     Returns
     -------
     reg_mean : xr.DataArray (region)
-        Mean value in each AR6 land region.
+        Mean value in each AR6 land region (over *valid land* cells only).
     reg_field : xr.DataArray (lat, lon)
         Map where each land grid cell takes the mean of its AR6 region.
         Ocean / non-region cells are NaN. Greenland and Antarctica are
@@ -49,28 +48,34 @@ def ar6_mean_and_field(
 
     regions = get_ar6_land_regions()
 
-    # mask_3D: dims ('region', 'lat', 'lon'), boolean
-    # NOTE: mask_3D already returns True/False. Using .notnull()
-    # would turn both True and False into True, so we MUST use it directly.
+    # mask_3D: dims ('region', 'lat', 'lon')
+    # Depending on regionmask version this can be bool or NaN/1.0; cast to bool robustly.
     mask_3d = regions.mask_3D(da["lon"], da["lat"])  # type: ignore[call-arg]
     mask_bool = mask_3d.astype(bool)
 
-    # Count valid cells per region
+    # "valid" = inside region AND finite data value
     valid = mask_bool & xr.ufuncs.isfinite(da)
+
+    # Count valid cells per region (used for min_valid threshold)
     n_valid = valid.sum(dim=("lat", "lon"))
 
-    # Simple equal-area weighting within each region
-    weights = mask_bool.astype(float)
-    num = (da.where(mask_bool) * weights).sum(dim=("lat", "lon"))
+    # ------------------------------------------------------------------
+    # Simple (unweighted) mean over *valid* cells only
+    # ------------------------------------------------------------------
+    weights = valid.astype(float)  # 1 for valid land cells; 0 otherwise
+    num = (da * weights).sum(dim=("lat", "lon"))
     den = weights.sum(dim=("lat", "lon"))
 
+    # Avoid division by zero
     reg_mean = num / den
+    reg_mean = reg_mean.where(den > 0)
+
     if min_valid is not None and min_valid > 0:
         reg_mean = reg_mean.where(n_valid >= min_valid)
 
-    # --------------------------------------------------------------
+    # ------------------------------------------------------------------
     # Identify AR6 regions corresponding to Greenland / Antarctica
-    # --------------------------------------------------------------
+    # ------------------------------------------------------------------
     region_names = list(regions.names)
     region_abbrevs = list(getattr(regions, "abbrevs", []))
 
@@ -94,14 +99,20 @@ def ar6_mean_and_field(
         # 2-D mask of all cells belonging to any of these regions
         mask_polar = mask_bool.isel(region=to_mask_idx).any(dim="region")
 
+    # ------------------------------------------------------------------
     # Broadcast regional means back onto the grid
+    # ------------------------------------------------------------------
     reg_mean_broadcast = reg_mean.broadcast_like(mask_bool)
+
+    # For plotting: fill the *entire AR6 polygon* with the region mean
+    # The mean was computed using land-only valid cells, BUT we want to color
+    # the whole region, not just land pixels.
     reg_field = reg_mean_broadcast.where(mask_bool)
 
     # Collapse 'region' dimension: each grid cell belongs to at most one region.
     reg_field = reg_field.max(dim="region")
 
-    # Mask out ocean / cells with no region at all
+    # Mask out cells with no region at all (should already be NaN for those)
     mask_any = mask_bool.any(dim="region")
     reg_field = reg_field.where(mask_any)
 
