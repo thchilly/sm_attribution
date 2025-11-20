@@ -63,6 +63,7 @@ OBS_SSI = [
     "gldas-v21",
     "somo-ml",
     "merra2-land",
+    "grace-da-dm",
 ]
 
 # Obs that are standardized anomalies (no SSI; use target='anomaly')
@@ -108,6 +109,15 @@ def parse_args() -> argparse.Namespace:
         "--landmask-key",
         default="isimip_no_ant_nogreenland",
         help="Landmask key in the registry.",
+    )
+    p.add_argument(
+        "--obs",
+        nargs="+",
+        default=None,
+        help=(
+            "Optional list of observation keys to process. "
+            "If omitted, use the full built-in OBS_SSI / OBS_ANOM lists."
+        ),
     )
     return p.parse_args()
 
@@ -316,14 +326,21 @@ def main() -> None:
     land = load_isimip_landmask(args.landmask_key)
 
     scenarios = reg.scenarios()
-    corrstart_yr = CORR_START_DEFAULT[:4]
-    corrend_yr = CORR_END_DEFAULT[:4]
 
     do_ssi = args.target in ("ssi", "both")
     do_anom = args.target in ("anomaly", "both")
 
+    # Resolve which obs to use for each category
+    if args.obs is None:
+        obs_ssi_list = OBS_SSI
+        obs_anom_list = OBS_ANOM
+    else:
+        # Only keep requested obs that belong to each group
+        obs_ssi_list = [k for k in args.obs if k in OBS_SSI]
+        obs_anom_list = [k for k in args.obs if k in OBS_ANOM]
+
     if do_ssi:
-        for obs_key in OBS_SSI:
+        for obs_key in obs_ssi_list:
             for scen in scenarios:
                 paths = [
                     compute_pair(
@@ -348,7 +365,7 @@ def main() -> None:
                 )
 
     if do_anom:
-        for obs_key in OBS_ANOM:
+        for obs_key in obs_anom_list:
             for scen in scenarios:
                 paths = [
                     compute_pair(

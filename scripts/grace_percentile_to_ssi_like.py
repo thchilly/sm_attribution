@@ -4,13 +4,13 @@ Convert GRACE-DA-DM monthly root-zone percentiles to an SSI-like product (z-scor
 optionally applying a multi-month window so it is comparable to model SSI.
 
 The script reads a preprocessed GRACE percentile product from the `observed_1m`
-registry entry and writes a NetCDF with variable `ssi` to the standard
-SSI-observed location (via `ssi_obs_path`).
+registry entry (e.g. key 'grace-da-dm') and writes a NetCDF with variable `ssi`
+to the standard SSI-observed location (via `ssi_obs_path`).
 
 Example
 -------
 python scripts/grace_percentile_to_ssi_like.py \
-    --obskey gracedadm_2003_2020 \
+    --obskey grace-da-dm \
     --scale 3 \
     --ref-start 2003-01 --ref-end 2019-12
 """
@@ -35,7 +35,6 @@ def _default_scale_from_settings() -> int:
     if the key is missing or malformed.
     """
     ssi_cfg = getattr(SETTINGS, "ssi", None)
-    # Handle both attribute-style and dict-style configs defensively
     if ssi_cfg is None:
         return 3
     if isinstance(ssi_cfg, dict):
@@ -43,7 +42,10 @@ def _default_scale_from_settings() -> int:
     return int(getattr(ssi_cfg, "scale_months", 3))
 
 
-def _load_grace_monthly_percentile(path: str, var: str = "rootzone_percentile") -> xr.DataArray:
+def _load_grace_monthly_percentile(
+    path: str,
+    var: str = "rootzone_percentile",
+) -> xr.DataArray:
     """Load GRACE monthly root-zone percentile field as (time, lat, lon) DataArray."""
     ds = xr.open_dataset(path)
 
@@ -53,14 +55,15 @@ def _load_grace_monthly_percentile(path: str, var: str = "rootzone_percentile") 
     else:
         # Fallback: first variable with (time, lat, lon) dimensions
         candidates = [
-            k for k in ds.data_vars
+            k
+            for k in ds.data_vars
             if {"time", "lat", "lon"}.issubset(ds[k].dims)
         ]
         if not candidates:
             raise KeyError(f"No (time, lat, lon) percentile variable found in {path}.")
         da = ds[candidates[0]]
 
-    # Normalize dimension names
+    # Normalise dimension names
     ren: dict[str, str] = {}
     if "latitude" in da.dims:
         ren["latitude"] = "lat"
@@ -89,11 +92,13 @@ def _percentile_to_z(perc_da: xr.DataArray) -> xr.DataArray:
     p = perc_da.clip(0.5, 99.5) / 100.0
     z = xr.apply_ufunc(norm.ppf, p, dask="allowed").astype("float32")
     z.name = "ssi"
-    z.attrs.update({
-        "long_name": "GRACE root-zone percentile transformed to z-score",
-        "units": "-",
-        "note": "percentile → z via norm.ppf(P/100); clipped to [0.5, 99.5] first",
-    })
+    z.attrs.update(
+        {
+            "long_name": "GRACE root-zone percentile transformed to z-score",
+            "units": "-",
+            "note": "percentile → z via norm.ppf(P/100); clipped to [0.5, 99.5] first",
+        }
+    )
     return z
 
 
@@ -104,7 +109,8 @@ def main() -> None:
     parser.add_argument(
         "--obskey",
         required=True,
-        help="Registry key for the GRACE monthly percentile file (e.g. 'gracedadm_2003_2020').",
+        help="Registry key for the GRACE monthly percentile file "
+             "(e.g. 'grace-da-dm').",
     )
     parser.add_argument(
         "--var",
@@ -161,24 +167,26 @@ def main() -> None:
     )
 
     # Update attributes with SSI metadata
-    da_z.attrs.update({
-        "standard_name": "standardized_soil_moisture_index",
-        "long_name": "Standardized Soil Moisture Index (z from GRACE percentile)",
-        "method": (
-            "GRACE monthly root-zone percentile converted to z-score, "
-            f"then {args.scale}-month rolling mean (if scale>1)."
-        ),
-        "ssi_scale": args.scale,
-        "ssi_ref_period": f"{args.ref_start}:{args.ref_end}",
-        "ssi_ref_description": (
-            "No re-estimation of ECDF; native GRACE percentile climatology "
-            "converted to z-scores, then a monthly window applied for SSI comparability."
-        ),
-        "source": str(in_path),
-        "ssi_mode": "ssi-like-from-percentile",
-    })
+    da_z.attrs.update(
+        {
+            "standard_name": "standardized_soil_moisture_index",
+            "long_name": "Standardized Soil Moisture Index "
+                         "(z from GRACE root-zone percentile)",
+            "method": (
+                "GRACE monthly root-zone percentile converted to z-score, "
+                f"then {args.scale}-month rolling mean (if scale>1)."
+            ),
+            "ssi_scale": args.scale,
+            "ssi_ref_period": f"{args.ref_start}:{args.ref_end}",
+            "ssi_ref_description": (
+                "No re-estimation of ECDF; native GRACE percentile climatology "
+                "converted to z-scores, then a monthly window applied for SSI comparability."
+            ),
+            "source": str(in_path),
+            "ssi_mode": "ssi-like-from-percentile",
+        }
+    )
 
-    # Write NetCDF
     ds_out = da_z.to_dataset(name="ssi")
     comp = dict(zlib=True, complevel=4, shuffle=True)
     encoding = {k: comp for k in ds_out.data_vars}

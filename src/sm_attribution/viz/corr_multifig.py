@@ -49,6 +49,7 @@ DEFAULT_OBS_ROWS: List[ObsRow] = [
     ObsRow("gldas-v21",   "ssi",     "GLDAS-NOAH v2.1"),
     ObsRow("somo-ml",     "ssi",     "SoMo.ml 0-0.5 m"),
     ObsRow("merra2-land", "ssi",     "MERRA-2 Land 0–1 m"),
+    ObsRow("grace-da-dm", "ssi", "GRACE-DA-DM root-zone"),
     ObsRow("gdo-ensmia",  "anomaly", "GDO ENSMIA (anom)"),
     ObsRow("gdo-smia",    "anomaly", "GDO SMIA (anom)"),
 ]
@@ -188,7 +189,7 @@ def plot_corr_multifig(
     r_colors: Iterable[str] = DEFAULT_R_COLORS,
     diff_bins: Iterable[float] = DEFAULT_DIFF_BINS,
     diff_colors: Iterable[str] = DEFAULT_DIFF_COLORS,
-    figsize=(12, 21),
+    figsize=(12, 23.5),
 ) -> plt.Figure:
     """
     Build a multi-panel figure comparing scenarios across observational products.
