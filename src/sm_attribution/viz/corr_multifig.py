@@ -305,11 +305,16 @@ def plot_corr_multifig(
             draw_ar6_outlines=True,
         )
 
-        # Col 3: AR6-aggregated difference (base - counter)
-        _, reg_field_counter = ar6_mean_and_field(r_counter)
-        diff_field = reg_field - reg_field_counter
-        diff_field.name = "r_diff"
+        # Calculate difference on the original grid
+        r_base = ds_base["r"]
+        r_counter = ds_counter["r"]
+        r_diff_grid = r_base - r_counter
+        r_diff_grid.name = "r_diff"
 
+        # Col 3: AR6-aggregated difference (base - counter)
+        # Now, aggregate the difference map (r_diff_grid) to AR6 regions
+        _, diff_field = ar6_mean_and_field(r_diff_grid)
+        
         ax3 = axes[irow, 2]
         mesh3 = _plot_global_map(
             ax3,
