@@ -28,7 +28,7 @@ def load_isimip_landmask(key: str = "isimip_water_global") -> xr.DataArray:
     if not os.path.exists(path):
         raise FileNotFoundError(f"Land–sea mask not found at: {path}")
 
-    ds = xr.open_dataset(path)
+    ds = xr.open_dataset(path, decode_times=xr.coders.CFDatetimeCoder(use_cftime=True))
     var = "mask" if "mask" in ds.data_vars else next(iter(ds.data_vars))
     m = ds[var]
 

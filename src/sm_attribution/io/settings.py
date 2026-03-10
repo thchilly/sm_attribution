@@ -2,6 +2,8 @@ from __future__ import annotations
 import yaml
 from pathlib import Path
 
+from sm_attribution.io.registry import project_root
+
 
 class Settings:
     def __init__(self, path: str | None = None):
@@ -9,18 +11,17 @@ class Settings:
         Load global settings from settings.yml.
 
         If `path` is None, resolve configs/settings.yml relative to the
-        project root (three parents up from this file, same logic as
-        io.registry.default_registry).
+        project root (detected via ``SM_ATTR_ROOT`` env var or
+        ``Path(__file__).parents[3]``).
         """
         if path is None:
-            # src/sm_attribution/io/settings.py -> project root
-            root = Path(__file__).resolve().parents[3]
+            root = project_root()
             path = root / "configs" / "settings.yml"
         else:
             path = Path(path)
             # If a relative path is given, treat it as relative to project root
             if not path.is_absolute():
-                root = Path(__file__).resolve().parents[3]
+                root = project_root()
                 path = root / path
 
         if not path.exists():
@@ -34,6 +35,7 @@ class Settings:
         self.target_calendar = cfg.get("target_calendar", "proleptic_gregorian")
         self.ssi = cfg.get("ssi", {})
         self.grid = cfg.get("grid", None)
+        self.dask = cfg.get("dask", {})
 
 
 # simple singleton-style accessor (import where needed)
