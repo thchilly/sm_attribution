@@ -6,8 +6,12 @@ Provides a helper to build a multi-panel figure:
   rows   = observational products
   col 1  = global multi-model mean correlation (obsclim_histsoc)
   col 2  = same, aggregated to AR6 regions
-  col 3  = AR6-aggregated difference:
-           obsclim_histsoc (multi-model) minus counterclim_histsoc (multi-model)
+  col 3  = AR6-aggregated Δr: climate change effect
+           obsclim_histsoc minus counterclim_histsoc
+  col 4  = AR6-aggregated Δr: direct human forcing effect
+           obsclim_histsoc minus obsclim_1901soc
+  col 5  = AR6-aggregated Δr: combined (climate + human) effect
+           obsclim_histsoc minus counterclim_1901soc
 
 All thresholds, colours and projections are configurable via module-level
 variables or function keyword arguments.
@@ -23,7 +27,11 @@ import matplotlib.colors as mcolors
 import cartopy.crs as ccrs
 import xarray as xr
 
-from sm_attribution.analysis.ensemble import correlation_multimodel_map_path
+from sm_attribution.analysis.ensemble import (
+    correlation_map_path,
+    correlation_multimodel_map_path,
+)
+from sm_attribution.analysis.ssi import DEFAULT_SSI_METHOD
 from sm_attribution.analysis.ar6_regions import (
     ar6_mean_and_field,
     get_ar6_land_regions,
@@ -53,6 +61,16 @@ DEFAULT_OBS_ROWS: List[ObsRow] = [
     ObsRow("gdo-ensmia",  "anomaly", "GDO ENSMIA (anom)"),
     ObsRow("gdo-smia",    "anomaly", "GDO SMIA (anom)"),
  ]
+
+DEFAULT_MODELS: List[str] = [
+    "h08",
+    "hydropy",
+    "jules-w2",
+    "miroc-integ-land",
+    "watergap2-2e",
+    "web-dhm-sg",
+    "lpjml5-7-10-fire",
+]
 
 FORCING_GROUPS = {k: v["group"] for k, v in OBS_GROUPS.items()}
 GROUP_LABELS = {
@@ -109,6 +127,7 @@ def _load_mm_corr(
     mode: str,
     corr_start: str,
     corr_end: str,
+    ssi_method: str = DEFAULT_SSI_METHOD,
 ) -> xr.Dataset:
     """Load a multi-model mean correlation dataset for a scenario/obs."""
     path = correlation_multimodel_map_path(
@@ -118,6 +137,7 @@ def _load_mm_corr(
         mode=mode,
         corr_start=corr_start,
         corr_end=corr_end,
+        ssi_method=ssi_method,
     )
     return xr.open_dataset(path)
 
@@ -194,15 +214,18 @@ def plot_corr_multifig(
     obs_rows: Optional[Iterable[ObsRow]] = None,
     scenario_base: str = "obsclim_histsoc",
     scenario_counter: str = "counterclim_histsoc",
+    scenario_1901soc: str = "obsclim_1901soc",
+    scenario_combined_counter: str = "counterclim_1901soc",
     mode: str = "standalone",
     corr_start: str = "2004-01",
     corr_end: str = "2019-12",
+    ssi_method: str = DEFAULT_SSI_METHOD,
     proj=DEFAULT_PROJ,
     r_bins: Iterable[float] = DEFAULT_R_BINS,
     r_colors: Iterable[str] = DEFAULT_R_COLORS,
     diff_bins: Iterable[float] = DEFAULT_DIFF_BINS,
     diff_colors: Iterable[str] = DEFAULT_DIFF_COLORS,
-    figsize=(12, 24.5),
+    figsize=(20, 24.5),
 ) -> plt.Figure:
     """
     Build a multi-panel figure comparing scenarios across observational products.
@@ -211,8 +234,12 @@ def plot_corr_multifig(
 
       Col 1: Global multi-model mean correlation for `scenario_base`.
       Col 2: Same as Col 1 but aggregated to AR6 regions.
-      Col 3: AR6-aggregated difference in multi-model mean correlation:
+      Col 3: AR6 Δr – climate change effect:
              `scenario_base` minus `scenario_counter`.
+      Col 4: AR6 Δr – direct human forcing effect:
+             `scenario_base` minus `scenario_1901soc`.
+      Col 5: AR6 Δr – combined (climate + human) effect:
+             `scenario_base` minus `scenario_combined_counter`.
     """
     if obs_rows is None:
         obs_rows = DEFAULT_OBS_ROWS
@@ -233,7 +260,7 @@ def plot_corr_multifig(
     obs_rows = obs_rows_sorted
 
     nrows = len(obs_rows)
-    ncols = 3
+    ncols = 5
 
     fig, axes = plt.subplots(
         nrows,
@@ -269,6 +296,7 @@ def plot_corr_multifig(
             mode=mode,
             corr_start=corr_start,
             corr_end=corr_end,
+            ssi_method=ssi_method,
         )
         ds_counter = _load_mm_corr(
             scenario=scenario_counter,
@@ -277,6 +305,25 @@ def plot_corr_multifig(
             mode=mode,
             corr_start=corr_start,
             corr_end=corr_end,
+            ssi_method=ssi_method,
+        )
+        ds_1901soc = _load_mm_corr(
+            scenario=scenario_1901soc,
+            obs_key=obs_key,
+            target=target,
+            mode=mode,
+            corr_start=corr_start,
+            corr_end=corr_end,
+            ssi_method=ssi_method,
+        )
+        ds_combined = _load_mm_corr(
+            scenario=scenario_combined_counter,
+            obs_key=obs_key,
+            target=target,
+            mode=mode,
+            corr_start=corr_start,
+            corr_end=corr_end,
+            ssi_method=ssi_method,
         )
 
         r_base = ds_base["r"]
@@ -321,10 +368,44 @@ def plot_corr_multifig(
             diff_field,
             bins=diff_bins,
             colors=diff_colors,
-            title=f"{label}\nGain in correlation [FC−CfC] (AR6 region average)",
+            title=f"{label}\nClimate change effect [FC\u00b7HS \u2212 CfC\u00b7HS]",
             draw_ar6_outlines=True,
         )
         meshes_col3.append(mesh3)
+
+        # Col 4: AR6-aggregated Δr – direct human forcing
+        # obsclim_histsoc minus obsclim_1901soc
+        r_1901soc = ds_1901soc["r"]
+        r_diff_human = r_base - r_1901soc
+        r_diff_human.name = "r_diff"
+        _, diff_human_field = ar6_mean_and_field(r_diff_human)
+
+        ax4 = axes[irow, 3]
+        _plot_global_map(
+            ax4,
+            diff_human_field,
+            bins=diff_bins,
+            colors=diff_colors,
+            title=f"{label}\nDirect human forcing [FC\u00b7HS \u2212 FC\u00b7PS]",
+            draw_ar6_outlines=True,
+        )
+
+        # Col 5: AR6-aggregated Δr – combined effect
+        # obsclim_histsoc minus counterclim_1901soc
+        r_combined = ds_combined["r"]
+        r_diff_combined = r_base - r_combined
+        r_diff_combined.name = "r_diff"
+        _, diff_combined_field = ar6_mean_and_field(r_diff_combined)
+
+        ax5 = axes[irow, 4]
+        _plot_global_map(
+            ax5,
+            diff_combined_field,
+            bins=diff_bins,
+            colors=diff_colors,
+            title=f"{label}\nCombined effect [FC\u00b7HS \u2212 CfC\u00b7PS]",
+            draw_ar6_outlines=True,
+        )
 
     # Adjust spacing: more vertical whitespace between rows,
     # but keep all map axes the same size.
@@ -369,8 +450,8 @@ def plot_corr_multifig(
     # Colourbars: place them in fixed figure coordinates so they do not
     # change the size of any particular column.
     # ------------------------------------------------------------------
-    # Left colourbar (for r)
-    cax1 = fig.add_axes([0.10, 0.06, 0.35, 0.01])  # [left, bottom, width, height]
+    # Left colourbar (for r — cols 1–2)
+    cax1 = fig.add_axes([0.04, 0.06, 0.22, 0.01])  # [left, bottom, width, height]
     cbar1 = fig.colorbar(
         meshes_col1[0],
         cax=cax1,
@@ -378,16 +459,242 @@ def plot_corr_multifig(
     )
     cbar1.set_label("Pearson r (multi-model mean)")
 
-    # Right colourbar (for Δr)
-    cax3 = fig.add_axes([0.55, 0.06, 0.35, 0.01])
+    # Right colourbar (for Δr — cols 3–5)
+    cax3 = fig.add_axes([0.35, 0.06, 0.55, 0.01])
     cbar3 = fig.colorbar(
         meshes_col3[0],
         cax=cax3,
         orientation="horizontal",
     )
     cbar3.set_label(
-        f"Δr = r({scenario_base}) − r({scenario_counter}) "
-        f"[{corrstart_yr}–{corrend_yr}]"
+        f"Δr (AR6 region average) [{corrstart_yr}–{corrend_yr}]"
     )
+
+    return fig
+
+
+# ---------------------------------------------------------------------
+# Multi-obs mean summary figure (single row, 5 columns)
+# ---------------------------------------------------------------------
+
+
+def _load_model_mean_corr(
+    models: List[str],
+    scenario: str,
+    obs_key: str,
+    *,
+    target: str,
+    mode: str,
+    corr_start: str,
+    corr_end: str,
+    ssi_method: str = DEFAULT_SSI_METHOD,
+) -> xr.DataArray:
+    """Load per-model correlation maps and return their mean ``r``."""
+    acc: Optional[xr.DataArray] = None
+    for model in models:
+        path = correlation_map_path(
+            model=model,
+            scenario=scenario,
+            obs_key=obs_key,
+            target=target,
+            mode=mode,
+            corr_start=corr_start,
+            corr_end=corr_end,
+            ssi_method=ssi_method,
+        )
+        r = xr.open_dataset(path)["r"]
+        acc = r.copy() if acc is None else acc + r
+    return acc / len(models)
+
+
+def plot_corr_obs_mean(
+    *,
+    obs_rows: Optional[Iterable[ObsRow]] = None,
+    models: Optional[List[str]] = None,
+    scenario_base: str = "obsclim_histsoc",
+    scenario_counter: str = "counterclim_histsoc",
+    scenario_1901soc: str = "obsclim_1901soc",
+    scenario_combined_counter: str = "counterclim_1901soc",
+    mode: str = "standalone",
+    corr_start: str = "2004-01",
+    corr_end: str = "2019-12",
+    ssi_method: str = DEFAULT_SSI_METHOD,
+    proj=DEFAULT_PROJ,
+    r_bins: Iterable[float] = DEFAULT_R_BINS,
+    r_colors: Iterable[str] = DEFAULT_R_COLORS,
+    diff_bins: Iterable[float] = DEFAULT_DIFF_BINS,
+    diff_colors: Iterable[str] = DEFAULT_DIFF_COLORS,
+    figsize=(20, 4.0),
+) -> plt.Figure:
+    """
+    Single-row, 5-column summary figure showing the **multi-obs mean**.
+
+    Parameters
+    ----------
+    models : list of str, optional
+        Subset of models to average over.  When *None* (default) the
+        pre-computed multi-model mean files are used (all 7 models).
+        When a list is given, the per-model correlation files are
+        loaded individually and averaged over the selected subset.
+
+    For every scenario the (multi-)model mean correlation map is first
+    loaded per observational dataset, then averaged across all obs rows.
+    The resulting fields are plotted identically to :func:`plot_corr_multifig`:
+
+      Col 1  Global multi-obs mean r (obsclim_histsoc).
+      Col 2  Same, aggregated to AR6 regions.
+      Col 3  AR6 Δr – climate change effect   (FC·HS − CfC·HS).
+      Col 4  AR6 Δr – direct human forcing     (FC·HS − FC·PS).
+      Col 5  AR6 Δr – combined effect           (FC·HS − CfC·PS).
+    """
+    if obs_rows is None:
+        obs_rows = DEFAULT_OBS_ROWS
+    obs_rows = list(obs_rows)
+
+    n_obs = len(obs_rows)
+    n_models = len(models) if models is not None else len(DEFAULT_MODELS)
+    corrstart_yr = corr_start[:4]
+    corrend_yr = corr_end[:4]
+
+    # ------------------------------------------------------------------
+    # 1. Accumulate r fields across all obs datasets
+    # ------------------------------------------------------------------
+    r_base_sum: Optional[xr.DataArray] = None
+    r_counter_sum: Optional[xr.DataArray] = None
+    r_1901soc_sum: Optional[xr.DataArray] = None
+    r_combined_sum: Optional[xr.DataArray] = None
+
+    _load_kw = dict(mode=mode, corr_start=corr_start, corr_end=corr_end,
+                    ssi_method=ssi_method)
+
+    for row in obs_rows:
+        if models is not None:
+            # Custom model subset → load per-model files & average
+            r_b = _load_model_mean_corr(
+                models, scenario_base, row.key,
+                target=row.target, **_load_kw)
+            r_c = _load_model_mean_corr(
+                models, scenario_counter, row.key,
+                target=row.target, **_load_kw)
+            r_s = _load_model_mean_corr(
+                models, scenario_1901soc, row.key,
+                target=row.target, **_load_kw)
+            r_x = _load_model_mean_corr(
+                models, scenario_combined_counter, row.key,
+                target=row.target, **_load_kw)
+        else:
+            # Use pre-computed multi-model mean files (all models)
+            r_b = _load_mm_corr(scenario=scenario_base, obs_key=row.key,
+                                target=row.target, **_load_kw)["r"]
+            r_c = _load_mm_corr(scenario=scenario_counter, obs_key=row.key,
+                                target=row.target, **_load_kw)["r"]
+            r_s = _load_mm_corr(scenario=scenario_1901soc, obs_key=row.key,
+                                target=row.target, **_load_kw)["r"]
+            r_x = _load_mm_corr(scenario=scenario_combined_counter, obs_key=row.key,
+                                target=row.target, **_load_kw)["r"]
+
+        if r_base_sum is None:
+            r_base_sum = r_b.copy()
+            r_counter_sum = r_c.copy()
+            r_1901soc_sum = r_s.copy()
+            r_combined_sum = r_x.copy()
+        else:
+            r_base_sum = r_base_sum + r_b
+            r_counter_sum = r_counter_sum + r_c
+            r_1901soc_sum = r_1901soc_sum + r_s
+            r_combined_sum = r_combined_sum + r_x
+
+    # Compute the mean across obs datasets
+    r_base_mean = r_base_sum / n_obs
+    r_counter_mean = r_counter_sum / n_obs
+    r_1901soc_mean = r_1901soc_sum / n_obs
+    r_combined_mean = r_combined_sum / n_obs
+
+    # ------------------------------------------------------------------
+    # 2. Compute Δr fields on the gridded level, then aggregate to AR6
+    # ------------------------------------------------------------------
+    dr_climate = r_base_mean - r_counter_mean
+    dr_climate.name = "r_diff"
+    dr_human = r_base_mean - r_1901soc_mean
+    dr_human.name = "r_diff"
+    dr_combined = r_base_mean - r_combined_mean
+    dr_combined.name = "r_diff"
+
+    # ------------------------------------------------------------------
+    # 3. Build the 1-row × 5-column figure
+    # ------------------------------------------------------------------
+    fig, axes = plt.subplots(
+        1, 5,
+        figsize=figsize,
+        subplot_kw={"projection": proj},
+        constrained_layout=False,
+    )
+
+    model_desc = ", ".join(models) if models is not None else f"all {n_models}"
+    label = f"Multi-obs mean (n_obs={n_obs}, n_mod={n_models})"
+
+    # Col 1: gridded r (base scenario, multi-obs mean)
+    mesh1 = _plot_global_map(
+        axes[0], r_base_mean,
+        bins=r_bins, colors=r_colors,
+        title=f"{label}\nMulti-model correlation (gridded)",
+    )
+
+    # Col 2: AR6-aggregated r (base scenario)
+    _, reg_field = ar6_mean_and_field(r_base_mean)
+    _plot_global_map(
+        axes[1], reg_field,
+        bins=r_bins, colors=r_colors,
+        title=f"{label}\nMulti-model correlation (AR6)",
+        draw_ar6_outlines=True,
+    )
+
+    # Col 3: AR6 Δr – climate change
+    _, dr_climate_ar6 = ar6_mean_and_field(dr_climate)
+    mesh3 = _plot_global_map(
+        axes[2], dr_climate_ar6,
+        bins=diff_bins, colors=diff_colors,
+        title=f"{label}\nClimate change [FC·HS − CfC·HS]",
+        draw_ar6_outlines=True,
+    )
+
+    # Col 4: AR6 Δr – direct human forcing
+    _, dr_human_ar6 = ar6_mean_and_field(dr_human)
+    _plot_global_map(
+        axes[3], dr_human_ar6,
+        bins=diff_bins, colors=diff_colors,
+        title=f"{label}\nDirect human forcing [FC·HS − FC·PS]",
+        draw_ar6_outlines=True,
+    )
+
+    # Col 5: AR6 Δr – combined effect
+    _, dr_combined_ar6 = ar6_mean_and_field(dr_combined)
+    _plot_global_map(
+        axes[4], dr_combined_ar6,
+        bins=diff_bins, colors=diff_colors,
+        title=f"{label}\nCombined effect [FC·HS − CfC·PS]",
+        draw_ar6_outlines=True,
+    )
+
+    # ------------------------------------------------------------------
+    # Layout & colourbars
+    # ------------------------------------------------------------------
+    fig.subplots_adjust(
+        wspace=0.02,
+        top=0.85,
+        bottom=0.18,
+        left=0.03,
+        right=0.97,
+    )
+
+    # Left colourbar (Pearson r — cols 1–2)
+    cax1 = fig.add_axes([0.04, 0.10, 0.22, 0.025])
+    cbar1 = fig.colorbar(mesh1, cax=cax1, orientation="horizontal")
+    cbar1.set_label("Pearson r (multi-model × multi-obs mean)")
+
+    # Right colourbar (Δr — cols 3–5)
+    cax3 = fig.add_axes([0.35, 0.10, 0.55, 0.025])
+    cbar3 = fig.colorbar(mesh3, cax=cax3, orientation="horizontal")
+    cbar3.set_label(f"Δr (AR6 region average) [{corrstart_yr}–{corrend_yr}]")
 
     return fig
