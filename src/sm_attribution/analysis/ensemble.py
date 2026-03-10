@@ -1,3 +1,5 @@
+# src/sm_attribution/analysis/ensemble.py
+
 """
 Utilities for standardized SSI paths and on-demand SSI generation
 for model and observational datasets, plus helpers for correlation
@@ -6,16 +8,33 @@ map paths (single-model and multi-model).
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
-from typing import Dict, Iterable, Tuple
+from typing import Dict, Iterable, Tuple, Sequence
 
 import xarray as xr
 import yaml
 
 from ..io.registry import Registry, default_registry
 from ..io.settings import get_settings
-from .ssi import save_ssi  # uses ssi_templates in data_registry.yml
+from ..io.load_mask import load_isimip_landmask
+from .ssi import (
+    save_ssi,
+    DEFAULT_SSI_METHOD,
+    _DEFAULT_TAIL_QUANTILE,
+    _DEFAULT_MIN_TAIL_SIZE,
+    _DEFAULT_LOC,
+    _DEFAULT_SCALE_METHOD,
+    _CHUNK_LAT,
+    _CHUNK_LON,
+)  # uses ssi_templates in data_registry.yml
+
+_chunks = {"lat": _CHUNK_LAT, "lon": _CHUNK_LON}
+logger = logging.getLogger(__name__)
+
+# Land mask key used to skip ocean/ice pixels in deseasonal_ecdf_gpd.
+_GPD_LAND_MASK_KEY = "isimip_no_ant_nogreenland"
 
 
 # ---------------------------------------------------------------------------
@@ -40,9 +59,7 @@ def _load_registry_yaml(yaml_path: str) -> dict:
 def _format_from_template(tmpl: str, **kw) -> str:
     """
     Expand {paths.*} placeholders and then regular `.format()` keys.
-
-    This is shared between SSI templates and correlation templates,
-    so keep behaviour very generic.
+    Shared between SSI templates and correlation templates.
     """
     paths = kw.get("paths")
     if isinstance(paths, dict):
@@ -55,11 +72,13 @@ def expected_ssi_path(
     *,
     yaml_path: str,
     is_model: bool,
-    key: str,  # "model_scenario" for models, obs key for observations
+    key: str,
     scale: int,
     ref_start: str,
     ref_end: str,
     mode: str,
+    pool_id: str | None = None,
+    ssi_method: str = DEFAULT_SSI_METHOD,
 ) -> str:
     """
     Resolve the expected SSI output path from data_registry.yml for either
@@ -78,7 +97,7 @@ def expected_ssi_path(
         SSI temporal scale in months.
     ref_start, ref_end : str
         Reference period for the ECDF (YYYY-MM strings).
-    mode : {"standalone", "pooled"}
+    mode : {"standalone", "pooled", "fixed"}
         Reference mode for models. Ignored for observations.
 
     Returns
@@ -107,6 +126,8 @@ def expected_ssi_path(
             mode=mode,
             refstart_yr=refstart_yr,
             refend_yr=refend_yr,
+            pool_id=(pool_id or "standalone"),
+            ssi_method=ssi_method,
         )
     else:
         tmpl = tmpls["observed"]
@@ -117,6 +138,7 @@ def expected_ssi_path(
             scale=scale,
             refstart=ref_start.replace("-", ""),
             refend=ref_end.replace("-", ""),
+            ssi_method=ssi_method,
         )
 
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
@@ -137,16 +159,18 @@ def ssi_model_path(
     ref_start: str = "2003-01",
     ref_end: str = "2019-12",
     mode: str = "standalone",
+    pool_id: str | None = None,
+    ssi_method: str = DEFAULT_SSI_METHOD,
 ) -> str:
     """
-    Return the expected SSI file path for a given (model, scenario)
-    according to data_registry.yml, without computing it.
-
-    This is useful for analysis steps (e.g., correlation) that only
-    need to locate already-produced SSI files.
+    Return the expected SSI file path for a given (model, scenario).
     """
     reg = reg or default_registry()
     key = f"{model}_{scenario}"
+
+    if pool_id is None:
+        pool_id = "standalone" if mode == "standalone" else "ALL_SCENARIOS"
+
     return expected_ssi_path(
         yaml_path=reg.yaml_path,
         is_model=True,
@@ -155,6 +179,8 @@ def ssi_model_path(
         ref_start=ref_start,
         ref_end=ref_end,
         mode=mode,
+        pool_id=pool_id,
+        ssi_method=ssi_method,
     )
 
 
@@ -165,10 +191,10 @@ def ssi_obs_path(
     scale: int = _DEFAULT_SSI_SCALE,
     ref_start: str = "2003-01",
     ref_end: str = "2019-12",
+    ssi_method: str = DEFAULT_SSI_METHOD,
 ) -> str:
     """
-    Return the expected SSI file path for an observed dataset
-    according to data_registry.yml, without computing it.
+    Return the expected SSI file path for an observed dataset.
     """
     reg = reg or default_registry()
     return expected_ssi_path(
@@ -179,6 +205,7 @@ def ssi_obs_path(
         ref_start=ref_start,
         ref_end=ref_end,
         mode="standalone",
+        ssi_method=ssi_method,
     )
 
 
@@ -196,17 +223,50 @@ def ensure_ssi_model(
     ref_start: str = "2003-01",
     ref_end: str = "2019-12",
     mode: str = "standalone",
+    pool_scenarios: Sequence[str] | None = None,
+    fixed_ref_scenario: str | None = None,
+    ssi_method: str = DEFAULT_SSI_METHOD,
+    tail_quantile: float = _DEFAULT_TAIL_QUANTILE,
+    min_tail_size: int = _DEFAULT_MIN_TAIL_SIZE,
+    loc: str = _DEFAULT_LOC,
+    scale_method: str = _DEFAULT_SCALE_METHOD,
 ) -> str:
     """
     Compute-or-skip SSI for a single (model, scenario).
+
+    Parameters
+    ----------
+    mode : {"standalone", "pooled", "fixed"}
+        - standalone: ECDF reference is the target series itself.
+        - pooled: ECDF reference is the concatenation of multiple scenarios.
+        - fixed: ECDF reference is a single designated scenario
+          (specified by *fixed_ref_scenario*, e.g. "obsclim_histsoc").
+    pool_scenarios : sequence of str, optional
+        Scenarios to pool (only used when mode="pooled").
+    fixed_ref_scenario : str, optional
+        The single scenario used as ECDF reference when mode="fixed"
+        (e.g. "obsclim_histsoc"). Required when mode="fixed".
 
     Returns
     -------
     str
         Path to the SSI file on disk.
     """
+    if mode == "fixed" and not fixed_ref_scenario:
+        raise ValueError("mode='fixed' requires fixed_ref_scenario (e.g. 'obsclim_histsoc').")
+
     reg = reg or default_registry()
     key = f"{model}_{scenario}"
+
+    scens: list[str] | None = None
+    if mode == "pooled":
+        scens = list(pool_scenarios) if pool_scenarios is not None else list(reg.scenarios())
+        pool_id = "__".join(sorted(scens)) if pool_scenarios is not None else "ALL_SCENARIOS"
+    elif mode == "fixed":
+        pool_id = fixed_ref_scenario  # type: ignore[assignment]
+    else:
+        pool_id = "standalone"
+
     out_path = expected_ssi_path(
         yaml_path=reg.yaml_path,
         is_model=True,
@@ -215,22 +275,49 @@ def ensure_ssi_model(
         ref_start=ref_start,
         ref_end=ref_end,
         mode=mode,
+        pool_id=pool_id,
+        ssi_method=ssi_method,
     )
     if os.path.exists(out_path):
         return out_path
 
-    # 0–1 m processed file
+    # 0–1 m processed file — open lazily with spatial chunks so data
+    # flows through the dask graph without materialising in the main process.
     src_path = reg.get_model_processed(model, scenario)
-    ds = xr.open_dataset(src_path)
+    if not os.path.exists(src_path):
+        raise FileNotFoundError(
+            f"Missing processed model input for SSI: model={model} scenario={scenario} path={src_path}"
+        )
+    _time_coder = xr.coders.CFDatetimeCoder(use_cftime=True)
+    ds = xr.open_dataset(src_path, decode_times=_time_coder, chunks=_chunks)
 
-    # Reference data for pooled ECDF (across scenarios)
+    # Load land mask for GPD method (skips ocean/ice pixels)
+    land_mask = None
+    if ssi_method == "deseasonal_ecdf_gpd":
+        try:
+            land_mask = load_isimip_landmask(_GPD_LAND_MASK_KEY)
+        except FileNotFoundError:
+            pass  # degrade gracefully — run without mask
+
+    # Build reference data depending on mode
     if mode == "pooled":
-        scens = list(reg.scenarios())
+        assert scens is not None
         ref_list = []
         for sc in scens:
             p = reg.get_model_processed(model, sc)
-            ref_list.append(xr.open_dataset(p)["soilmoist_1m"])
+            if not os.path.exists(p):
+                raise FileNotFoundError(
+                    f"Missing pooled reference input for SSI: model={model} scenario={sc} path={p}"
+                )
+            ref_list.append(xr.open_dataset(p, decode_times=_time_coder, chunks=_chunks)["soilmoist_1m"])
         ref_da = xr.concat(ref_list, dim="time").sortby("time")
+    elif mode == "fixed":
+        ref_path = reg.get_model_processed(model, fixed_ref_scenario)  # type: ignore[arg-type]
+        if not os.path.exists(ref_path):
+            raise FileNotFoundError(
+                f"Missing fixed reference input for SSI: model={model} ref_scenario={fixed_ref_scenario} path={ref_path}"
+            )
+        ref_da = xr.open_dataset(ref_path, decode_times=_time_coder, chunks=_chunks)["soilmoist_1m"]
     else:
         ref_da = None
 
@@ -243,6 +330,14 @@ def ensure_ssi_model(
         ref_end=ref_end,
         mode=mode,
         ref_data=ref_da,
+        pool_id=pool_id,
+        pool_scenarios=scens,
+        ssi_method=ssi_method,
+        tail_quantile=tail_quantile,
+        min_tail_size=min_tail_size,
+        loc=loc,
+        scale_method=scale_method,
+        land_mask=land_mask,
     )
     return out
 
@@ -254,6 +349,11 @@ def ensure_ssi_obs(
     scale: int = _DEFAULT_SSI_SCALE,
     ref_start: str = "2003-01",
     ref_end: str = "2019-12",
+    ssi_method: str = DEFAULT_SSI_METHOD,
+    tail_quantile: float = _DEFAULT_TAIL_QUANTILE,
+    min_tail_size: int = _DEFAULT_MIN_TAIL_SIZE,
+    loc: str = _DEFAULT_LOC,
+    scale_method: str = _DEFAULT_SCALE_METHOD,
 ) -> str:
     """
     Compute-or-skip SSI for a single observed dataset key.
@@ -272,20 +372,32 @@ def ensure_ssi_obs(
         ref_start=ref_start,
         ref_end=ref_end,
         mode="standalone",
+        ssi_method=ssi_method,
     )
     if os.path.exists(out_path):
         return out_path
 
-    src_path = reg.get_obs_processed(obs_key)  # 0–1 m (or equivalent) file
-    ds = xr.open_dataset(src_path)
+    src_path = reg.get_obs_processed(obs_key)
+    if not os.path.exists(src_path):
+        raise FileNotFoundError(
+            f"Missing processed observation input for SSI: obs={obs_key} path={src_path}"
+        )
+    _time_coder = xr.coders.CFDatetimeCoder(use_cftime=True)
+    ds = xr.open_dataset(src_path, decode_times=_time_coder, chunks=_chunks)
 
-    # Observed 1m files may not always use "soilmoist_1m" as a name; normalize.
     if "soilmoist_1m" in ds:
         da = ds["soilmoist_1m"]
     else:
-        # Fallback: first data variable
         first = next(iter(ds.data_vars))
         da = ds[first]
+
+    # Load land mask for GPD method (skips ocean/ice pixels)
+    land_mask = None
+    if ssi_method == "deseasonal_ecdf_gpd":
+        try:
+            land_mask = load_isimip_landmask(_GPD_LAND_MASK_KEY)
+        except FileNotFoundError:
+            pass  # degrade gracefully — run without mask
 
     out = save_ssi(
         da,
@@ -294,6 +406,12 @@ def ensure_ssi_obs(
         scale=scale,
         ref_start=ref_start,
         ref_end=ref_end,
+        ssi_method=ssi_method,
+        tail_quantile=tail_quantile,
+        min_tail_size=min_tail_size,
+        loc=loc,
+        scale_method=scale_method,
+        land_mask=land_mask,
     )
     return out
 
@@ -307,6 +425,13 @@ def ensure_all_models(
     ref_start: str = "2003-01",
     ref_end: str = "2019-12",
     mode: str = "standalone",
+    pool_scenarios: Sequence[str] | None = None,
+    fixed_ref_scenario: str | None = None,
+    ssi_method: str = DEFAULT_SSI_METHOD,
+    tail_quantile: float = _DEFAULT_TAIL_QUANTILE,
+    min_tail_size: int = _DEFAULT_MIN_TAIL_SIZE,
+    loc: str = _DEFAULT_LOC,
+    scale_method: str = _DEFAULT_SCALE_METHOD,
 ) -> Dict[Tuple[str, str], str]:
     """
     Compute-or-skip SSI for all (model, scenario) combinations.
@@ -328,6 +453,13 @@ def ensure_all_models(
                 ref_start=ref_start,
                 ref_end=ref_end,
                 mode=mode,
+                pool_scenarios=pool_scenarios,
+                fixed_ref_scenario=fixed_ref_scenario,
+                ssi_method=ssi_method,
+                tail_quantile=tail_quantile,
+                min_tail_size=min_tail_size,
+                loc=loc,
+                scale_method=scale_method,
             )
     return out
 
@@ -339,6 +471,11 @@ def ensure_all_obs(
     scale: int = _DEFAULT_SSI_SCALE,
     ref_start: str = "2003-01",
     ref_end: str = "2019-12",
+    ssi_method: str = DEFAULT_SSI_METHOD,
+    tail_quantile: float = _DEFAULT_TAIL_QUANTILE,
+    min_tail_size: int = _DEFAULT_MIN_TAIL_SIZE,
+    loc: str = _DEFAULT_LOC,
+    scale_method: str = _DEFAULT_SCALE_METHOD,
 ) -> Dict[str, str]:
     """
     Compute-or-skip SSI for all observational datasets.
@@ -356,14 +493,14 @@ def ensure_all_obs(
             scale=scale,
             ref_start=ref_start,
             ref_end=ref_end,
+            ssi_method=ssi_method,
+            tail_quantile=tail_quantile,
+            min_tail_size=min_tail_size,
+            loc=loc,
+            scale_method=scale_method,
         )
         for k in obs_keys
     }
-
-
-# ---------------------------------------------------------------------------
-# Correlation map path helpers
-# ---------------------------------------------------------------------------
 
 
 def correlation_map_path(
@@ -375,6 +512,7 @@ def correlation_map_path(
     mode: str = "standalone",
     corr_start: str = "2004-01",
     corr_end: str = "2019-12",
+    ssi_method: str = DEFAULT_SSI_METHOD,
     reg: Registry | None = None,
 ) -> str:
     """
@@ -402,6 +540,7 @@ def correlation_map_path(
         scenario=scenario,
         corrstart_yr=corrstart_yr,
         corrend_yr=corrend_yr,
+        ssi_method=ssi_method,
     )
     return out_path
 
@@ -414,6 +553,7 @@ def correlation_multimodel_map_path(
     mode: str = "standalone",
     corr_start: str = "2004-01",
     corr_end: str = "2019-12",
+    ssi_method: str = DEFAULT_SSI_METHOD,
     reg: Registry | None = None,
 ) -> str:
     """
@@ -440,5 +580,6 @@ def correlation_multimodel_map_path(
         scenario=scenario,
         corrstart_yr=corrstart_yr,
         corrend_yr=corrend_yr,
+        ssi_method=ssi_method,
     )
     return out_path
