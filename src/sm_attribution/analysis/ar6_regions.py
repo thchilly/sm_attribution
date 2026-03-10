@@ -22,6 +22,7 @@ def get_ar6_land_regions() -> regionmask.Regions:
 def ar6_mean_and_field(
     da: xr.DataArray,
     min_valid: int = 10,
+    agg: str = "mean",
 ) -> Tuple[xr.DataArray, xr.DataArray]:
     """
     Aggregate a 2D (lat, lon) field onto AR6 land regions.
@@ -33,16 +34,24 @@ def ar6_mean_and_field(
     min_valid : int
         Minimum number of valid grid cells required for a region
         mean to be kept. Regions with fewer valid cells are set to NaN.
+    agg : {"mean", "median"}
+        Aggregation method.  ``"mean"`` (default) computes the
+        unweighted arithmetic mean over valid cells; ``"median"``
+        computes the median.
 
     Returns
     -------
-    reg_mean : xr.DataArray (region)
-        Mean value in each AR6 land region (over *valid land* cells only).
+    reg_agg : xr.DataArray (region)
+        Aggregated value in each AR6 land region (over *valid land*
+        cells only).
     reg_field : xr.DataArray (lat, lon)
-        Map where each land grid cell takes the mean of its AR6 region.
-        Ocean / non-region cells are NaN. Greenland and Antarctica are
-        force-masked to NaN (for consistency with the ISIMIP landmask).
+        Map where each land grid cell takes the aggregated value of
+        its AR6 region. Ocean / non-region cells are NaN. Greenland
+        and Antarctica are force-masked to NaN (for consistency with
+        the ISIMIP landmask).
     """
+    if agg not in ("mean", "median"):
+        raise ValueError(f"agg must be 'mean' or 'median', got '{agg}'")
     if not {"lat", "lon"}.issubset(da.dims):
         raise ValueError("Input DataArray must have 'lat' and 'lon' dimensions.")
 
@@ -60,15 +69,17 @@ def ar6_mean_and_field(
     n_valid = valid.sum(dim=("lat", "lon"))
 
     # ------------------------------------------------------------------
-    # Simple (unweighted) mean over *valid* cells only
+    # Aggregate over *valid* cells only
     # ------------------------------------------------------------------
-    weights = valid.astype(float)  # 1 for valid land cells; 0 otherwise
-    num = (da * weights).sum(dim=("lat", "lon"))
-    den = weights.sum(dim=("lat", "lon"))
-
-    # Avoid division by zero
-    reg_mean = num / den
-    reg_mean = reg_mean.where(den > 0)
+    if agg == "mean":
+        weights = valid.astype(float)  # 1 for valid land cells; 0 otherwise
+        num = (da * weights).sum(dim=("lat", "lon"))
+        den = weights.sum(dim=("lat", "lon"))
+        reg_mean = num / den
+        reg_mean = reg_mean.where(den > 0)
+    else:  # median
+        # da.where(valid) sets invalid cells to NaN; median skips NaNs.
+        reg_mean = da.where(valid).median(dim=("lat", "lon"))
 
     if min_valid is not None and min_valid > 0:
         reg_mean = reg_mean.where(n_valid >= min_valid)
@@ -104,10 +115,9 @@ def ar6_mean_and_field(
     # ------------------------------------------------------------------
     reg_mean_broadcast = reg_mean.broadcast_like(mask_bool)
 
-    # For plotting: fill the *entire AR6 polygon* with the region mean
-    # The mean was computed using land-only valid cells, BUT we want to color
-    # the whole region, not just land pixels.
-    reg_field = reg_mean_broadcast.where(mask_bool)
+    # For plotting: fill only land cells that have valid data with the
+    # regional mean. Ocean cells inside AR6 polygons remain NaN.
+    reg_field = reg_mean_broadcast.where(valid)
 
     # Collapse 'region' dimension: each grid cell belongs to at most one region.
     reg_field = reg_field.max(dim="region")
