@@ -1,0 +1,30 @@
+name: sm-attr-311
+channels:
+  - defaults
+  - https://repo.anaconda.com/pkgs/main
+  - https://repo.anaconda.com/pkgs/r
+dependencies:
+  - bottleneck
+  - cartopy
+  - cftime
+  - dask
+  - esmf
+  - esmpy
+  - geopandas
+  - matplotlib
+  - netcdf4
+  - numpy
+  - pandas
+  - pytest
+  - python=3.11
+  - pyyaml
+  - rasterio
+  - rioxarray
+  - seaborn
+  - shapely
+  - tqdm
+  - xarray
+  - xesmf
+  - xskillscore
+  - ipykernel
+prefix: /opt/anaconda3/envs/sm-attr-311

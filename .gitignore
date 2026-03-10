@@ -34,8 +34,15 @@ figures/*.pdf
 figures/*.svg
 *.log
 *.tmp
+logs/
 
 # Backups of environment files
 old.environment.yml
 *backup*.yml
 env*_backup.yml
+
+# Figures
+figures/
+
+# Perl/sed in-place edit backups
+*.bak
