@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+#scripts/grace_percentile_to_ssi_like.py
+
 """
 Convert GRACE-DA-DM monthly root-zone percentiles to an SSI-like product (z-scores),
 optionally applying a multi-month window so it is comparable to model SSI.
