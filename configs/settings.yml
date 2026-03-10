@@ -4,5 +4,22 @@ target_calendar: proleptic_gregorian
 ssi:
   scale_months: 3
   threshold_fixed: -1.5
-  anchor: counterclim
+  # --- deseasonal_ecdf_gpd defaults ---
+  hybrid_tail_quantile: 0.10
+  hybrid_min_tail_size: 20
+  hybrid_loc: "median"
+  hybrid_scale_method: "iqr"
 grid: "common_grid"
+
+# --- Dask / parallelism ---
+dask:
+  chunk_lat: 30          # spatial chunk size for lat dimension
+  chunk_lon: 30          # spatial chunk size for lon dimension
+  max_workers: null      # null = os.cpu_count() - 2; override with integer
+                         # or use DASK_NUM_WORKERS env var at runtime
+  use_distributed: false # true = dask.distributed LocalCluster (recommended
+                         # for multi-core servers); false = scheduler="processes"
+  concurrent_models: 1   # number of models processed in parallel during
+                         # orchestration.  1 = serial (safe for MacBook);
+                         # set to 3-4 on multi-core servers to overlap
+                         # Dask graph submissions across models.

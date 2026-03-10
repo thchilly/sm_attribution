@@ -1,14 +1,17 @@
 # configs/data_registry.yml
 
 paths:
-  root: "/Users/thchilly/projects/sm_attribution/data"
-  raw_models: "/Users/thchilly/projects/sm_attribution/data/models"
-  raw_obs: "/Users/thchilly/projects/sm_attribution/data/observed"
-  processed_models_1m: "/Users/thchilly/projects/sm_attribution/data/models_1m"
-  processed_obs_1m: "/Users/thchilly/projects/sm_attribution/data/observed_1m"
+  root: "data"
+  raw_models: "data/models"
+  raw_obs: "data/observed"
+  processed_models_1m: "data/models_1m"
+  processed_obs_1m: "data/observed_1m"
   # SSI path
-  ssi_models: "/Users/thchilly/projects/sm_attribution/data/ssi_models"
-  ssi_observed: "/Users/thchilly/projects/sm_attribution/data/ssi_observed"
+  ssi_models: "data/ssi_models"
+  ssi_observed: "data/ssi_observed"
+  # Drought-features output path (NEW)
+  drought_features_models: "data/drought_features_models"
+  drought_features_observed: "data/drought_features_observed"
 
 naming_notes:
   obsclim: "observational (factual) climate"
@@ -16,109 +19,147 @@ naming_notes:
   soc: "socioeconomic forcing; using histsoc and 1901soc for all models"
 
 # --------------------------------------------------------------------
+# Observational coverage and SSI handling
+obs_periods:
+  era5-land:    {start: "1950-01", end: "2020-12"}
+  gleam-42a:    {start: "1980-01", end: "2020-12"}
+  gleam-42b:    {start: "2003-01", end: "2020-12"}
+  gldas-v20:    {start: "1948-01", end: "2014-12"}
+  gldas-v21:    {start: "2000-01", end: "2020-12"}
+  somo-ml:      {start: "2000-01", end: "2019-12"}
+  grace-da-dm:  {start: "2003-01", end: "2020-12"}
+  merra2-land:  {start: "1980-01", end: "2020-12"}
+  gdo-ensmia:   {start: "2001-01", end: "2020-12"}
+  gdo-smia:     {start: "1995-01", end: "2020-12"}
+
+# Common overlap period used for "common" runs
+common_period:
+  start: "2003-01"
+  end:   "2019-12"
+
+# Model availability window (avoid hardcoding 1901–2019 in code)
+model_period:
+  start: "1901-01"
+  end: "2019-12"
+
+# How SSI should be handled per obs dataset
+obs_ssi_method:
+  era5-land: "standard"
+  gleam-42a: "standard"
+  gleam-42b: "standard"
+  gldas-v20: "standard"
+  gldas-v21: "standard"
+  somo-ml: "standard"
+  merra2-land: "standard"
+  grace-da-dm: "grace_percentile_custom"
+  gdo-ensmia: "ssi_ready"
+  gdo-smia: "ssi_ready"
+
+
+# --------------------------------------------------------------------
 # RAW MODEL FILES (flat files, one per model+scenario)
 # Four scenarios per model: obsclim_histsoc, counterclim_histsoc, obsclim_1901soc, counterclim_1901soc
 models:
   h08:
-    obsclim_histsoc:        "/Users/thchilly/projects/sm_attribution/data/models/h08_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
-    counterclim_histsoc:    "/Users/thchilly/projects/sm_attribution/data/models/h08_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
-    obsclim_1901soc:        "/Users/thchilly/projects/sm_attribution/data/models/h08_gswp3-w5e5_obsclim_1901soc_default_soilmoist_global_monthly_1901_2019.nc"
-    counterclim_1901soc:    "/Users/thchilly/projects/sm_attribution/data/models/h08_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019.nc"
+    obsclim_histsoc:        "data/models/h08_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
+    counterclim_histsoc:    "data/models/h08_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
+    obsclim_1901soc:        "data/models/h08_gswp3-w5e5_obsclim_1901soc_default_soilmoist_global_monthly_1901_2019.nc"
+    counterclim_1901soc:    "data/models/h08_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019.nc"
     variable: "soilmoist"
 
   hydropy:
-    obsclim_histsoc:        "/Users/thchilly/projects/sm_attribution/data/models/hydropy_gswp3-w5e5_obsclim_histsoc_default_rootmoist_global_monthly_1901_2019.nc"
-    counterclim_histsoc:    "/Users/thchilly/projects/sm_attribution/data/models/hydropy_gswp3-w5e5_counterclim_histsoc_default_rootmoist_global_monthly_1901_2019.nc"
-    obsclim_1901soc:        "/Users/thchilly/projects/sm_attribution/data/models/hydropy_gswp3-w5e5_obsclim_1901soc_default_rootmoist_global_monthly_1901_2019.nc"
-    counterclim_1901soc:    "/Users/thchilly/projects/sm_attribution/data/models/hydropy_gswp3-w5e5_counterclim_1901soc_default_rootmoist_global_monthly_1901_2019.nc"
+    obsclim_histsoc:        "data/models/hydropy_gswp3-w5e5_obsclim_histsoc_default_rootmoist_global_monthly_1901_2019.nc"
+    counterclim_histsoc:    "data/models/hydropy_gswp3-w5e5_counterclim_histsoc_default_rootmoist_global_monthly_1901_2019.nc"
+    obsclim_1901soc:        "data/models/hydropy_gswp3-w5e5_obsclim_1901soc_default_rootmoist_global_monthly_1901_2019.nc"
+    counterclim_1901soc:    "data/models/hydropy_gswp3-w5e5_counterclim_1901soc_default_rootmoist_global_monthly_1901_2019.nc"
     variable: "rootmoist"   # different name; code should branch on this
 
   jules-w2:
-    obsclim_histsoc:        "/Users/thchilly/projects/sm_attribution/data/models/jules-w2_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
-    counterclim_histsoc:    "/Users/thchilly/projects/sm_attribution/data/models/jules-w2_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
-    obsclim_1901soc:        "/Users/thchilly/projects/sm_attribution/data/models/jules-w2_gswp3-w5e5_obsclim_1901soc_default_soilmoist_global_monthly_1901_2019.nc"
-    counterclim_1901soc:    "/Users/thchilly/projects/sm_attribution/data/models/jules-w2_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019.nc"
+    obsclim_histsoc:        "data/models/jules-w2_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
+    counterclim_histsoc:    "data/models/jules-w2_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
+    obsclim_1901soc:        "data/models/jules-w2_gswp3-w5e5_obsclim_1901soc_default_soilmoist_global_monthly_1901_2019.nc"
+    counterclim_1901soc:    "data/models/jules-w2_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019.nc"
     variable: "soilmoist"
 
   miroc-integ-land:
-    obsclim_histsoc:        "/Users/thchilly/projects/sm_attribution/data/models/miroc-integ-land_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
-    counterclim_histsoc:    "/Users/thchilly/projects/sm_attribution/data/models/miroc-integ-land_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
-    obsclim_1901soc:        "/Users/thchilly/projects/sm_attribution/data/models/miroc-integ-land_gswp3-w5e5_obsclim_1901soc_default_soilmoist_global_monthly_1901_2019.nc"
-    counterclim_1901soc:    "/Users/thchilly/projects/sm_attribution/data/models/miroc-integ-land_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019.nc"
+    obsclim_histsoc:        "data/models/miroc-integ-land_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
+    counterclim_histsoc:    "data/models/miroc-integ-land_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
+    obsclim_1901soc:        "data/models/miroc-integ-land_gswp3-w5e5_obsclim_1901soc_default_soilmoist_global_monthly_1901_2019.nc"
+    counterclim_1901soc:    "data/models/miroc-integ-land_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019.nc"
     variable: "soilmoist"
 
   watergap2-2e:
-    obsclim_histsoc:        "/Users/thchilly/projects/sm_attribution/data/models/watergap2-2e_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
-    counterclim_histsoc:    "/Users/thchilly/projects/sm_attribution/data/models/watergap2-2e_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
-    obsclim_1901soc:        "/Users/thchilly/projects/sm_attribution/data/models/watergap2-2e_gswp3-w5e5_obsclim_1901soc_default_soilmoist_global_monthly_1901_2019.nc"
-    counterclim_1901soc:    "/Users/thchilly/projects/sm_attribution/data/models/watergap2-2e_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019.nc"
+    obsclim_histsoc:        "data/models/watergap2-2e_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
+    counterclim_histsoc:    "data/models/watergap2-2e_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
+    obsclim_1901soc:        "data/models/watergap2-2e_gswp3-w5e5_obsclim_1901soc_default_soilmoist_global_monthly_1901_2019.nc"
+    counterclim_1901soc:    "data/models/watergap2-2e_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019.nc"
     variable: "soilmoist"
 
   web-dhm-sg:
-    obsclim_histsoc:        "/Users/thchilly/projects/sm_attribution/data/models/web-dhm-sg_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
-    counterclim_histsoc:    "/Users/thchilly/projects/sm_attribution/data/models/web-dhm-sg_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
-    obsclim_1901soc:        "/Users/thchilly/projects/sm_attribution/data/models/web-dhm-sg_gswp3-w5e5_obsclim_1901soc_default_soilmoist_global_monthly_1901_2019.nc"
-    counterclim_1901soc:    "/Users/thchilly/projects/sm_attribution/data/models/web-dhm-sg_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019.nc"
+    obsclim_histsoc:        "data/models/web-dhm-sg_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
+    counterclim_histsoc:    "data/models/web-dhm-sg_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
+    obsclim_1901soc:        "data/models/web-dhm-sg_gswp3-w5e5_obsclim_1901soc_default_soilmoist_global_monthly_1901_2019.nc"
+    counterclim_1901soc:    "data/models/web-dhm-sg_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019.nc"
     variable: "soilmoist"
 
   lpjml5-7-10-fire:
-    obsclim_histsoc:        "/Users/thchilly/projects/sm_attribution/data/models/lpjml5-7-10-fire_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
-    counterclim_histsoc:    "/Users/thchilly/projects/sm_attribution/data/models/lpjml5-7-10-fire_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
-    obsclim_1901soc:        "/Users/thchilly/projects/sm_attribution/data/models/lpjml5-7-10-fire_gswp3-w5e5_obsclim_1901soc_default_soilmoist_global_monthly_1901_2019.nc"
-    counterclim_1901soc:    "/Users/thchilly/projects/sm_attribution/data/models/lpjml5-7-10-fire_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019.nc"
+    obsclim_histsoc:        "data/models/lpjml5-7-10-fire_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
+    counterclim_histsoc:    "data/models/lpjml5-7-10-fire_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019.nc"
+    obsclim_1901soc:        "data/models/lpjml5-7-10-fire_gswp3-w5e5_obsclim_1901soc_default_soilmoist_global_monthly_1901_2019.nc"
+    counterclim_1901soc:    "data/models/lpjml5-7-10-fire_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019.nc"
     variable: "soilmoist"
 
 # model ancillary files (e.g., landcover, soil properties) for 0-1 (v1) depth homogenization
 model_ancils:
   watergap2-2e:
-    landcover: "/Users/thchilly/projects/sm_attribution/data/ancils/watergap2-2e/watergap_22d_landcover.nc4"
+    landcover: "data/ancils/watergap2-2e/watergap_22d_landcover.nc4"
 
   h08:
-    soil_depth: "/Users/thchilly/projects/sm_attribution/data/ancils/h08/709-H08_SoilDepth.nc"
-    soil_moist_max: "/Users/thchilly/projects/sm_attribution/data/ancils/h08/709-H08_SoilMoisMax.nc"
+    soil_depth: "data/ancils/h08/709-H08_SoilDepth.nc"
+    soil_moist_max: "data/ancils/h08/709-H08_SoilMoisMax.nc"
 
   web-dhm-sg:
-    landcover_depths: "/Users/thchilly/projects/sm_attribution/data/ancils/web-dhm-sg/webdhmsg_landcover_depths_0p5deg.nc"
+    landcover_depths: "data/ancils/web-dhm-sg/webdhmsg_landcover_depths_0p5deg.nc"
 
 
 # --------------------------------------------------------------------
 # RAW OBSERVATIONS (use only NetCDF/NC4; ignore .mat/.m files)
 observations:
   era5land:
-    path: "/Users/thchilly/projects/sm_attribution/data/observed/ERA5-LAND/era5land_soil_moisture_1950_2025.nc"
+    path: "data/observed/ERA5-LAND/era5land_soil_moisture_1950_2025.nc"
     notes: "ERA5-Land monthly (CDS single NetCDF, 1950–2025). Variables: swvl1, swvl2, swvl3 volumetric (m³ m⁻³). Use layers 1–3 for 0–1 m integration; ignore legacy per-year files."
   gleam42a:
-    path: "/Users/thchilly/projects/sm_attribution/data/observed/GLEAM/v4.2a/SMrz/SMrz_*_GLEAM_v4.2a_MO.nc"
+    path: "data/observed/GLEAM/v4.2a/SMrz/SMrz_*_GLEAM_v4.2a_MO.nc"
     notes: "GLEAM v4.2a SMrz monthly (volumetric). Use v0 (no depth remap)."
   gleam42b:
-    path: "/Users/thchilly/projects/sm_attribution/data/observed/GLEAM/v4.2b/SMrz/SMrz_*_GLEAM_v4.2b_MO.nc"
+    path: "data/observed/GLEAM/v4.2b/SMrz/SMrz_*_GLEAM_v4.2b_MO.nc"
     notes: "GLEAM v4.2b SMrz monthly (volumetric). Use v0 (no depth remap)."
   gldas_v20:
-    path: "/Users/thchilly/projects/sm_attribution/data/observed/GLDASv2/v2.0/GLDAS_NOAH025_M.A*.020.nc4"
+    path: "data/observed/GLDASv2/v2.0/GLDAS_NOAH025_M.A*.020.nc4"
     notes: "GLDAS-2.0 NOAH025 monthly 0.25° (1948–2014). Variables: SoilMoi* volumetric m³/m³; integrate 0–10, 10–40, and 40–100 cm to approximate 0–1 m (v0)."
   gldas_v21:
-    path: "/Users/thchilly/projects/sm_attribution/data/observed/GLDASv2/v2.1/GLDAS_NOAH025_M.A*.021.nc4"
+    path: "data/observed/GLDASv2/v2.1/GLDAS_NOAH025_M.A*.021.nc4"
     notes: "GLDAS-2.1 NOAH025 monthly 0.25° (2000–2020). Same layer mapping as v2.0 (v0)."
   somo_ml_layer1:
-    path: "/Users/thchilly/projects/sm_attribution/data/observed/SOMO-ML/SoMo.ml_v1_layer1/SoMo.ml_v1_layer1_*.nc"
+    path: "data/observed/SOMO-ML/SoMo.ml_v1_layer1/SoMo.ml_v1_layer1_*.nc"
     notes: "SoMo.ml v1 Layer 1 (0–10 cm), volumetric (m^3 m^-3). Annual NetCDF per year; will be aggregated to monthly and regridded to 0.5°."
   somo_ml_layer2:
-    path: "/Users/thchilly/projects/sm_attribution/data/observed/SOMO-ML/SoMo.ml_v1_layer2/SoMo.ml_v1_layer2_*.nc"
+    path: "data/observed/SOMO-ML/SoMo.ml_v1_layer2/SoMo.ml_v1_layer2_*.nc"
     notes: "SoMo.ml v1 Layer 2 (10–30 cm), volumetric (m^3 m^-3). Annual NetCDF per year; will be aggregated to monthly and regridded to 0.5°."
   somo_ml_layer3:
-    path: "/Users/thchilly/projects/sm_attribution/data/observed/SOMO-ML/SoMo.ml_v1_layer3/SoMo.ml_v1_layer3_*.nc"
+    path: "data/observed/SOMO-ML/SoMo.ml_v1_layer3/SoMo.ml_v1_layer3_*.nc"
     notes: "SoMo.ml v1 Layer 3 (30–50 cm), volumetric (m^3 m^-3). Annual NetCDF per year; will be aggregated to monthly and regridded to 0.5°."
   gracedadm_weekly:
-    path: "/Users/thchilly/projects/sm_attribution/data/observed/GRACEDADM/raw_weekly_files/GRACEDADM_CLSM025GL_7D.A*.030.nc4"
+    path: "data/observed/GRACEDADM/raw_weekly_files/GRACEDADM_CLSM025GL_7D.A*.030.nc4"
     notes: "GRACE-DA-DM Global v3.0 weekly percentiles (sfsm_inst, rtzsm_inst, gws_inst), 0.25°. Aggregate to monthly and coarsen to 0.5°. Use rtzsm_inst for root-zone."
   merra2_land:
-    path: "/Users/thchilly/projects/sm_attribution/data/observed/MERRA2-LAND/raw_files/MERRA2_*.tavgM_2d_lnd_Nx.*.nc4"
+    path: "data/observed/MERRA2-LAND/raw_files/MERRA2_*.tavgM_2d_lnd_Nx.*.nc4"
     notes: "MERRA-2 Land (tavgM_2d_lnd_Nx, monthly 0.5°×0.625°). Variables: SFMC and RZMC volumetric (m³/m³). Use blended 0.05×SFMC + 0.95×RZMC to create 0–1 m equivalent (1980–2020)."
   gdo_ensmia:
-    path: "/Users/thchilly/projects/sm_attribution/data/observed/GDO-ENSMIA/smant_m_wld_*.nc"
+    path: "data/observed/GDO-ENSMIA/smant_m_wld_*.nc"
     notes: "GDO Ensemble Soil Moisture Anomaly (ten-daily standardized anomaly, 0.1°). Preprocess: select 3rd dekad per month (full-month window), then 0.1°→0.5° by 5×5 block mean. Units: dimensionless; baseline 2001–2016."
   gdo_smia:
-    path: "/Users/thchilly/projects/sm_attribution/data/observed/GDO-SMIA/**/smang_m_gdo_*_t_300_z01.tif"
+    path: "data/observed/GDO-SMIA/**/smang_m_gdo_*_t_300_z01.tif"
     notes: "GDO SMIA (LISFLOOD-only SMA, 1 arcmin) GeoTIFFs nested by year; pattern uses ** for recursive glob. Ten-daily standardized anomaly; use 3rd dekad per month; coarsen 0.1°→0.5° by 5×5 mean."
 
 # --------------------------------------------------------------------
@@ -126,60 +167,69 @@ observations:
 processed:
   models_1m:
     h08:
-      obsclim_histsoc:        "/Users/thchilly/projects/sm_attribution/data/models_1m/h08_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
-      counterclim_histsoc:    "/Users/thchilly/projects/sm_attribution/data/models_1m/h08_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
-      obsclim_1901soc:        "/Users/thchilly/projects/sm_attribution/data/models_1m/h08_gswp3-w5e5_obsclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
-      counterclim_1901soc:    "/Users/thchilly/projects/sm_attribution/data/models_1m/h08_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      obsclim_histsoc:        "data/models_1m/h08_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      counterclim_histsoc:    "data/models_1m/h08_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      obsclim_1901soc:        "data/models_1m/h08_gswp3-w5e5_obsclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      counterclim_1901soc:    "data/models_1m/h08_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
     hydropy:
-      obsclim_histsoc:        "/Users/thchilly/projects/sm_attribution/data/models_1m/hydropy_gswp3-w5e5_obsclim_histsoc_default_rootmoist_global_monthly_1901_2019_1m.nc"
-      counterclim_histsoc:    "/Users/thchilly/projects/sm_attribution/data/models_1m/hydropy_gswp3-w5e5_counterclim_histsoc_default_rootmoist_global_monthly_1901_2019_1m.nc"
-      obsclim_1901soc:        "/Users/thchilly/projects/sm_attribution/data/models_1m/hydropy_gswp3-w5e5_obsclim_1901soc_default_rootmoist_global_monthly_1901_2019_1m.nc"
-      counterclim_1901soc:    "/Users/thchilly/projects/sm_attribution/data/models_1m/hydropy_gswp3-w5e5_counterclim_1901soc_default_rootmoist_global_monthly_1901_2019_1m.nc"
+      obsclim_histsoc:        "data/models_1m/hydropy_gswp3-w5e5_obsclim_histsoc_default_rootmoist_global_monthly_1901_2019_1m.nc"
+      counterclim_histsoc:    "data/models_1m/hydropy_gswp3-w5e5_counterclim_histsoc_default_rootmoist_global_monthly_1901_2019_1m.nc"
+      obsclim_1901soc:        "data/models_1m/hydropy_gswp3-w5e5_obsclim_1901soc_default_rootmoist_global_monthly_1901_2019_1m.nc"
+      counterclim_1901soc:    "data/models_1m/hydropy_gswp3-w5e5_counterclim_1901soc_default_rootmoist_global_monthly_1901_2019_1m.nc"
     jules-w2:
-      obsclim_histsoc:        "/Users/thchilly/projects/sm_attribution/data/models_1m/jules-w2_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
-      counterclim_histsoc:    "/Users/thchilly/projects/sm_attribution/data/models_1m/jules-w2_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
-      obsclim_1901soc:        "/Users/thchilly/projects/sm_attribution/data/models_1m/jules-w2_gswp3-w5e5_obsclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
-      counterclim_1901soc:    "/Users/thchilly/projects/sm_attribution/data/models_1m/jules-w2_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      obsclim_histsoc:        "data/models_1m/jules-w2_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      counterclim_histsoc:    "data/models_1m/jules-w2_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      obsclim_1901soc:        "data/models_1m/jules-w2_gswp3-w5e5_obsclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      counterclim_1901soc:    "data/models_1m/jules-w2_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
     miroc-integ-land:
-      obsclim_histsoc:        "/Users/thchilly/projects/sm_attribution/data/models_1m/miroc-integ-land_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
-      counterclim_histsoc:    "/Users/thchilly/projects/sm_attribution/data/models_1m/miroc-integ-land_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
-      obsclim_1901soc:        "/Users/thchilly/projects/sm_attribution/data/models_1m/miroc-integ-land_gswp3-w5e5_obsclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
-      counterclim_1901soc:    "/Users/thchilly/projects/sm_attribution/data/models_1m/miroc-integ-land_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      obsclim_histsoc:        "data/models_1m/miroc-integ-land_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      counterclim_histsoc:    "data/models_1m/miroc-integ-land_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      obsclim_1901soc:        "data/models_1m/miroc-integ-land_gswp3-w5e5_obsclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      counterclim_1901soc:    "data/models_1m/miroc-integ-land_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
     watergap2-2e:
-      obsclim_histsoc:        "/Users/thchilly/projects/sm_attribution/data/models_1m/watergap2-2e_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
-      counterclim_histsoc:    "/Users/thchilly/projects/sm_attribution/data/models_1m/watergap2-2e_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
-      obsclim_1901soc:        "/Users/thchilly/projects/sm_attribution/data/models_1m/watergap2-2e_gswp3-w5e5_obsclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
-      counterclim_1901soc:    "/Users/thchilly/projects/sm_attribution/data/models_1m/watergap2-2e_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      obsclim_histsoc:        "data/models_1m/watergap2-2e_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      counterclim_histsoc:    "data/models_1m/watergap2-2e_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      obsclim_1901soc:        "data/models_1m/watergap2-2e_gswp3-w5e5_obsclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      counterclim_1901soc:    "data/models_1m/watergap2-2e_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
     web-dhm-sg:
-      obsclim_histsoc:        "/Users/thchilly/projects/sm_attribution/data/models_1m/web-dhm-sg_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
-      counterclim_histsoc:    "/Users/thchilly/projects/sm_attribution/data/models_1m/web-dhm-sg_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
-      obsclim_1901soc:        "/Users/thchilly/projects/sm_attribution/data/models_1m/web-dhm-sg_gswp3-w5e5_obsclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
-      counterclim_1901soc:    "/Users/thchilly/projects/sm_attribution/data/models_1m/web-dhm-sg_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      obsclim_histsoc:        "data/models_1m/web-dhm-sg_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      counterclim_histsoc:    "data/models_1m/web-dhm-sg_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      obsclim_1901soc:        "data/models_1m/web-dhm-sg_gswp3-w5e5_obsclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      counterclim_1901soc:    "data/models_1m/web-dhm-sg_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
     lpjml5-7-10-fire:
-      obsclim_histsoc:        "/Users/thchilly/projects/sm_attribution/data/models_1m/lpjml5-7-10-fire_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
-      counterclim_histsoc:    "/Users/thchilly/projects/sm_attribution/data/models_1m/lpjml5-7-10-fire_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
-      obsclim_1901soc:        "/Users/thchilly/projects/sm_attribution/data/models_1m/lpjml5-7-10-fire_gswp3-w5e5_obsclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
-      counterclim_1901soc:    "/Users/thchilly/projects/sm_attribution/data/models_1m/lpjml5-7-10-fire_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      obsclim_histsoc:        "data/models_1m/lpjml5-7-10-fire_gswp3-w5e5_obsclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      counterclim_histsoc:    "data/models_1m/lpjml5-7-10-fire_gswp3-w5e5_counterclim_histsoc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      obsclim_1901soc:        "data/models_1m/lpjml5-7-10-fire_gswp3-w5e5_obsclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
+      counterclim_1901soc:    "data/models_1m/lpjml5-7-10-fire_gswp3-w5e5_counterclim_1901soc_default_soilmoist_global_monthly_1901_2019_1m.nc"
 
   observed_1m:
-    era5-land: "/Users/thchilly/projects/sm_attribution/data/observed_1m/ERA5-LAND/ERA5L_soilmoist_1m_monthly_0p5deg_1950_2020.nc"
-    gleam-42a: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLEAM/GLEAM_v4.2a_SMrz_monthly_0p5deg_1980_2020_v0.nc"
-    gleam-42b: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLEAM/GLEAM_v4.2b_SMrz_monthly_0p5deg_2003_2020_v0.nc"
-    gldas-v20: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLDAS/GLDAS_NOAH_v2.0_soilmoist_1m_monthly_0p5deg_1948_2014_v0.nc"
-    gldas-v21: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GLDAS/GLDAS_NOAH_v2.1_soilmoist_1m_monthly_0p5deg_2000_2020_v0.nc"
-    somo-ml: "/Users/thchilly/projects/sm_attribution/data/observed_1m/SOMO-ML/SoMoML_v1_soilmoist_0p5m_monthly_0p5deg_2000_2019_v0.nc"
-    grace-da-dm: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GRACE-DA-DM/GRACEDADM_CLSM025GL_rootzone_percentile_monthly_0p5deg_2003_2020_v0.nc"
-    merra2-land: "/Users/thchilly/projects/sm_attribution/data/observed_1m/MERRA2-LAND/MERRA2L_soilmoist_1m_monthly_0p5deg_1980_2020_v0.nc"
-    gdo-ensmia: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GDO-ENSMIA/GDO_ENSMIA_soilmoist_anom_std_monthly_0p5deg_2001_2020_v0.nc"
-    gdo-smia: "/Users/thchilly/projects/sm_attribution/data/observed_1m/GDO-SMIA/gdo_smia_soilmoist_anom_std_monthly_0p5deg_1995_2020_v0.nc"
+    era5-land: "data/observed_1m/ERA5-LAND/ERA5L_soilmoist_1m_monthly_0p5deg_1950_2020.nc"
+    gleam-42a: "data/observed_1m/GLEAM/GLEAM_v4.2a_SMrz_monthly_0p5deg_1980_2020_v0.nc"
+    gleam-42b: "data/observed_1m/GLEAM/GLEAM_v4.2b_SMrz_monthly_0p5deg_2003_2020_v0.nc"
+    gldas-v20: "data/observed_1m/GLDAS/GLDAS_NOAH_v2.0_soilmoist_1m_monthly_0p5deg_1948_2014_v0.nc"
+    gldas-v21: "data/observed_1m/GLDAS/GLDAS_NOAH_v2.1_soilmoist_1m_monthly_0p5deg_2000_2020_v0.nc"
+    somo-ml: "data/observed_1m/SOMO-ML/SoMoML_v1_soilmoist_0p5m_monthly_0p5deg_2000_2019_v0.nc"
+    grace-da-dm: "data/observed_1m/GRACE-DA-DM/GRACEDADM_CLSM025GL_rootzone_percentile_monthly_0p5deg_2003_2020_v0.nc"
+    merra2-land: "data/observed_1m/MERRA2-LAND/MERRA2L_soilmoist_1m_monthly_0p5deg_1980_2020_v0.nc"
+    gdo-ensmia: "data/observed_1m/GDO-ENSMIA/GDO_ENSMIA_soilmoist_anom_std_monthly_0p5deg_2001_2020_v0.nc"
+    gdo-smia: "data/observed_1m/GDO-SMIA/gdo_smia_soilmoist_anom_std_monthly_0p5deg_1995_2020_v0.nc"
 
 # --------------------------------------------------------------------
 # configs/data_registry.yml
+# --------------------------------------------------------------------
+# SSI output templates
 ssi_templates:
-  model: "{paths.ssi_models}/{mode}/ref_{refstart_yr}_{refend_yr}/{model}_{scenario}_ssi-{mode}_s{scale}_ref{refstart}-{refend}.nc"
-  observed: "{paths.ssi_observed}/{obskey}_ssi_s{scale}_ref{refstart}-{refend}.nc"
+  model: "{paths.ssi_models}/{ssi_method}/{mode}/ref_{refstart_yr}_{refend_yr}/pool_{pool_id}/{model}_{scenario}_ssi-{mode}_s{scale}_ref{refstart}-{refend}.nc"
+  observed: "{paths.ssi_observed}/{ssi_method}/{obskey}_ssi_s{scale}_ref{refstart}-{refend}.nc"
 
-  # configs/data_registry.yml  (add near other top-level blocks)
+# --------------------------------------------------------------------
+# Drought-features output templates (one NetCDF per model/scenario or obs key)
+drought_features_templates:
+  model: "{paths.drought_features_models}/{ssi_method}/{mode}/ref_{refstart_yr}_{refend_yr}/pool_{pool_id}/{model}_{scenario}_droughtfeat_s{scale}_ref{refstart}-{refend}_feat{featstart}-{featend}.nc"
+  observed: "{paths.drought_features_observed}/{ssi_method}/{obskey}_droughtfeat_s{scale}_ref{refstart}-{refend}_feat{featstart}-{featend}.nc"
+
+# --------------------------------------------------------------------
+# Ancillary paths (top-level!)
 ancils:
   landmask:
     isimip_water_global: "{paths.root}/ancils/_land_mask/landseamask_water-global.nc"
@@ -188,8 +238,11 @@ ancils:
     isimip_no_ant_nogreenland: "{paths.root}/ancils/_land_mask/landseamask_no-ant-nogreenland.nc"
   shapes:
     greenland_gl: "{paths.root}/ancils/_land_mask/gl_shp/gl.shp"
-    
-metrics:
-  correlations_map: "{paths.root}/metrics/correlations/{mode}/ref_{corrstart_yr}_{corrend_yr}/{obs_short}/corr_{target}_{obs_short}_{model}_{scenario}_{corrstart_yr}_{corrend_yr}.nc"
 
-  correlations_multimodel_map: "{paths.root}/metrics/correlations/{mode}/ref_{corrstart_yr}_{corrend_yr}/{obs_short}/multi-model/corr_{target}_{obs_short}_multi-model_{scenario}_{corrstart_yr}_{corrend_yr}.nc"
+# --------------------------------------------------------------------
+# Metrics output templates
+metrics:
+  correlations_map: "{paths.root}/metrics/correlations/{ssi_method}/{mode}/ref_{corrstart_yr}_{corrend_yr}/{obs_short}/corr_{target}_{obs_short}_{model}_{scenario}_{corrstart_yr}_{corrend_yr}.nc"
+  correlations_multimodel_map: "{paths.root}/metrics/correlations/{ssi_method}/{mode}/ref_{corrstart_yr}_{corrend_yr}/{obs_short}/multi-model/corr_{target}_{obs_short}_multi-model_{scenario}_{corrstart_yr}_{corrend_yr}.nc"
+  spatial_correlation_master: "{paths.root}/metrics/spatial_correlation/{ssi_method}/{obskey}/{period_mode}_{model_mode}_pool{pool_id}_ref{refstart}-{refend}_s{scale}.nc"
+  droughtfeat_ar6_metrics_master: "{paths.root}/metrics/droughtfeat_ar6_metrics/{ssi_method}/{obskey}/{period_mode}_{model_mode}_pool{pool_id}_ref{refstart}-{refend}_s{scale}.nc"
